@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+/* 行動描写(【 】ルール)表示用の明朝体フォント。font-mincho ユーティリティとして使う */
+@theme {
+  --font-mincho: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "MS PMincho", serif;
+}
+
+/* ダークモード基調のベーススタイル */
+:root {
+  color-scheme: dark;
+}
+
+/* メッセージ出現時の軽いフェードイン(仕様書10.3) */
+@keyframes message-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-message-in {
+  animation: message-fade-in 0.25s ease-out both;
+}
