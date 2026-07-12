@@ -72,15 +72,17 @@ export function ChatInput({
   };
 
   return (
-    <div className="border-t border-zinc-800 bg-zinc-950 pt-3">
+    <div className="border-t border-[var(--chat-border)] bg-[var(--chat-surface)] pt-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         {/* トピック/発言 切替セグメント */}
-        <div className="inline-flex rounded-md border border-zinc-700 p-0.5 text-sm">
+        <div className="inline-flex rounded-md border border-[var(--chat-button-border)] p-0.5 text-sm">
           <button
             type="button"
             onClick={() => setMode("topic")}
             className={`rounded px-3 py-1 ${
-              mode === "topic" ? "bg-indigo-600 text-white" : "text-zinc-400 hover:text-zinc-200"
+              mode === "topic"
+                ? "bg-indigo-600 text-white"
+                : "text-[var(--chat-placeholder-text)] hover:text-[var(--chat-button-text)]"
             }`}
           >
             トピック
@@ -89,7 +91,9 @@ export function ChatInput({
             type="button"
             onClick={() => setMode("message")}
             className={`rounded px-3 py-1 ${
-              mode === "message" ? "bg-indigo-600 text-white" : "text-zinc-400 hover:text-zinc-200"
+              mode === "message"
+                ? "bg-indigo-600 text-white"
+                : "text-[var(--chat-placeholder-text)] hover:text-[var(--chat-button-text)]"
             }`}
           >
             発言
@@ -103,7 +107,7 @@ export function ChatInput({
             disabled={busy || !canUndo}
             onClick={onUndo}
             title="直前の生成を取り消す"
-            className="rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-[var(--chat-button-border)] px-3 py-2 text-sm text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             元に戻す
           </button>
@@ -113,22 +117,26 @@ export function ChatInput({
             disabled={busy}
             onClick={onGenerateNext}
             title="トピックや発言を追加せず、今の流れのままキャラたちに会話を続けさせる"
-            className="rounded-md border border-indigo-600 px-3 py-2 text-sm text-indigo-300 hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-indigo-600 px-3 py-2 text-sm text-[var(--chat-accent-text)] hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40"
           >
             会話を続ける
           </button>
 
           {/* 自動連続生成(仕様書5.1): 回数上限付き。生成中は停止ボタンで中断できる */}
-          <div className="flex items-center gap-1 rounded-md border border-zinc-700 pl-1">
+          <div className="flex items-center gap-1 rounded-md border border-[var(--chat-button-border)] pl-1">
             <select
               value={autoCount}
               onChange={(e) => setAutoCount(Number(e.target.value))}
               disabled={busy}
               title="自動連続生成の回数(上限あり)"
-              className="rounded-md bg-transparent px-1 py-2 text-xs text-zinc-300 outline-none disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-md bg-transparent px-1 py-2 text-xs text-[var(--chat-button-text)] outline-none disabled:cursor-not-allowed disabled:opacity-40"
             >
               {AUTO_GENERATE_COUNT_OPTIONS.map((n) => (
-                <option key={n} value={n} className="bg-zinc-900">
+                <option
+                  key={n}
+                  value={n}
+                  className="bg-[var(--chat-input-bg)] text-[var(--chat-input-text)]"
+                >
                   {n}回連続
                 </option>
               ))}
@@ -137,7 +145,7 @@ export function ChatInput({
               <button
                 type="button"
                 onClick={onStopAutoGenerate}
-                className="rounded-md border border-red-700 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
+                className="rounded-md border border-red-700 px-3 py-2 text-sm text-[var(--chat-danger-text)] hover:bg-red-500/10"
               >
                 停止
               </button>
@@ -146,7 +154,7 @@ export function ChatInput({
                 type="button"
                 disabled={generating}
                 onClick={() => onAutoGenerate(autoCount)}
-                className="rounded-md px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-md px-3 py-2 text-sm text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 自動生成
               </button>
@@ -166,7 +174,7 @@ export function ChatInput({
             disabled={busy}
             onClick={onGenerateNext}
             title="トピックや発言を追加せず、今の流れのままキャラたちに会話を続けさせる"
-            className="rounded-md border border-indigo-600 px-3 py-2 text-sm text-indigo-300 hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-indigo-600 px-3 py-2 text-sm text-[var(--chat-accent-text)] hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40"
           >
             会話を続ける
           </button>
@@ -174,7 +182,7 @@ export function ChatInput({
             <button
               type="button"
               onClick={onStopAutoGenerate}
-              className="rounded-md border border-red-700 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
+              className="rounded-md border border-red-700 px-3 py-2 text-sm text-[var(--chat-danger-text)] hover:bg-red-500/10"
             >
               停止
             </button>
@@ -187,8 +195,8 @@ export function ChatInput({
             title="その他の操作(元に戻す・再生成・自動生成)"
             className={`rounded-md border px-3 py-2 text-sm ${
               mobileOptionsOpen
-                ? "border-indigo-400 text-indigo-300"
-                : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                ? "border-indigo-400 text-[var(--chat-accent-text)]"
+                : "border-[var(--chat-button-border)] text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
             }`}
           >
             ⋯
@@ -198,28 +206,32 @@ export function ChatInput({
 
       {/* モバイル用オプション行(「⋯」で開閉): 元に戻す・再生成・自動生成の開始をここにまとめる */}
       {mobileOptionsOpen && (
-        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900/60 p-2 sm:hidden">
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-[var(--chat-border)] bg-[var(--chat-input-bg)] p-2 sm:hidden">
           <button
             type="button"
             disabled={busy || !canUndo}
             onClick={onUndo}
             title="直前の生成を取り消す"
-            className="rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-md border border-[var(--chat-button-border)] px-3 py-2 text-sm text-[var(--chat-button-text)] hover:bg-[var(--chat-surface)] disabled:cursor-not-allowed disabled:opacity-40"
           >
             元に戻す
           </button>
           <RegenerateMenu disabled={busy || !canRegenerate} onRegenerate={onRegenerate} />
           {!autoGenerating && (
-            <div className="flex items-center gap-1 rounded-md border border-zinc-700 pl-1">
+            <div className="flex items-center gap-1 rounded-md border border-[var(--chat-button-border)] pl-1">
               <select
                 value={autoCount}
                 onChange={(e) => setAutoCount(Number(e.target.value))}
                 disabled={busy}
                 title="自動連続生成の回数(上限あり)"
-                className="rounded-md bg-transparent px-1 py-2 text-xs text-zinc-300 outline-none disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-md bg-transparent px-1 py-2 text-xs text-[var(--chat-button-text)] outline-none disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {AUTO_GENERATE_COUNT_OPTIONS.map((n) => (
-                  <option key={n} value={n} className="bg-zinc-900">
+                  <option
+                    key={n}
+                    value={n}
+                    className="bg-[var(--chat-input-bg)] text-[var(--chat-input-text)]"
+                  >
                     {n}回連続
                   </option>
                 ))}
@@ -228,7 +240,7 @@ export function ChatInput({
                 type="button"
                 disabled={generating}
                 onClick={() => onAutoGenerate(autoCount)}
-                className="rounded-md px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded-md px-3 py-2 text-sm text-[var(--chat-button-text)] hover:bg-[var(--chat-surface)] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 自動生成
               </button>
@@ -254,7 +266,7 @@ export function ChatInput({
               ? "例: 夕飯を何にするか相談 / ちょっと気まずい空気になっている"
               : "キャラクターたちに向けて発言する(【 】で行動描写。セリフの途中でもOK)"
           }
-          className="max-h-32 min-h-[42px] flex-1 resize-none rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+          className="max-h-32 min-h-[42px] flex-1 resize-none rounded-md border border-[var(--chat-button-border)] bg-[var(--chat-input-bg)] px-3 py-2 text-sm text-[var(--chat-input-text)] outline-none placeholder:text-[var(--chat-placeholder-text)] focus:border-indigo-500"
         />
         <button
           type="submit"
@@ -266,13 +278,13 @@ export function ChatInput({
       </form>
       {mode === "message" ? (
         <>
-          <p className="mt-1 hidden text-xs text-zinc-600 sm:block">
+          <p className="mt-1 hidden text-xs text-[var(--chat-placeholder-text)] sm:block">
             【 】で囲むと行動描写になります(セリフの途中でもOK)/ Shift+Enterで改行
           </p>
-          <p className="mt-1 text-xs text-zinc-600 sm:hidden">【 】で行動描写</p>
+          <p className="mt-1 text-xs text-[var(--chat-placeholder-text)] sm:hidden">【 】で行動描写</p>
         </>
       ) : (
-        <p className="mt-1 text-xs text-zinc-600">
+        <p className="mt-1 text-xs text-[var(--chat-placeholder-text)]">
           投入すると、その話題でキャラたちが話し始めます
         </p>
       )}

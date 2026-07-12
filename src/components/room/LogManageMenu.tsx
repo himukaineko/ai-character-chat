@@ -35,7 +35,7 @@ export function LogManageMenu({
       <button
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
-        className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+        className="rounded-md border border-[var(--chat-button-border)] px-3 py-1.5 text-xs text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
       >
         ログ管理
       </button>
@@ -102,7 +102,7 @@ export function LogManageMenu({
         onConfirm={() => run(onResetAll)}
       />
       {running && (
-        <span className="pointer-events-none absolute -bottom-6 right-0 text-xs text-zinc-500">実行中…</span>
+        <span className="pointer-events-none absolute -bottom-6 right-0 text-xs text-[var(--chat-placeholder-text)]">実行中…</span>
       )}
     </div>
   );

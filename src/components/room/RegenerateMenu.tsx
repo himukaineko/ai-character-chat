@@ -18,7 +18,7 @@ export function RegenerateMenu({ disabled, onRegenerate }: RegenerateMenuProps) 
         type="button"
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+        className="rounded-md border border-[var(--chat-button-border)] px-3 py-2 text-sm text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)] disabled:cursor-not-allowed disabled:opacity-40"
       >
         再生成 ▾
       </button>

@@ -30,8 +30,13 @@ import {
   rewindTo,
 } from "../lib/messages";
 import { listMemories, updateMemory } from "../lib/memories";
-import { loadAppSettings, saveLastRoomId } from "../lib/settings";
-import { CHAT_FONT_SIZE_VALUES, chatThemeToCssVars } from "../lib/chatDisplay";
+import { loadAppSettings, saveAppSettings, saveLastRoomId } from "../lib/settings";
+import {
+  CHAT_FONT_SIZE_VALUES,
+  CHAT_THEME_OPTIONS,
+  chatThemeToCssVars,
+  nextChatTheme,
+} from "../lib/chatDisplay";
 import {
   generateNextBatch,
   regenerateLastBatch,
@@ -89,9 +94,70 @@ export function RoomPage() {
   const logEndRef = useRef<HTMLDivElement>(null);
 
   // チャット表示カスタム(文字サイズ・配色テーマ): 設定画面で保存された値をこのルーム画面に適用する
-  const [appSettings] = useState(() => loadAppSettings());
+  // 機能追加(ルーム内テーマ切替アイコン): 初回読み込みだけのuseState(() => ...)のままだと
+  // アイコンボタンで切り替えても再レンダリングされないため、setterを持つ通常のstateにしておく。
+  const [appSettings, setAppSettings] = useState(() => loadAppSettings());
   const chatFontSize = resolveChatFontSize(appSettings.chatFontSize);
   const chatTheme = resolveChatTheme(appSettings.chatTheme, appSettings.chatBackground);
+  // light/naturalは明るいサーフェスのため、暗背景専用の半透明バナー配色(amber/red)は
+  // そのままだと文字が読みにくくなる。バナー類の配色分岐に使う判定フラグ。
+  const isLightSurfaceTheme = chatTheme === "light" || chatTheme === "natural";
+
+  // テーマ切替トースト(機能追加): アイコンボタンでテーマを切り替えた瞬間、テーマ名を短時間表示する
+  const [themeToast, setThemeToast] = useState<string | null>(null);
+  const themeToastTimerRef = useRef<number | null>(null);
+  // 初回マウント時のchatTheme確定はユーザー操作による切替ではないため、トースト表示・保存対象外にする
+  const isFirstThemeRenderRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      if (themeToastTimerRef.current !== null) {
+        window.clearTimeout(themeToastTimerRef.current);
+      }
+    };
+  }, []);
+
+  /**
+   * 配色テーマが変わった後の副作用(保存・トースト表示)。
+   * chatThemeの変化そのものをトリガーにすることで、handleCycleThemeを連打したときに
+   * 古いレンダー時点のchatThemeを閉じ込めたまま二重に「1つ先」へ計算してしまう
+   * (setState内でsetAppSettingsに渡す値をローカル変数chatThemeから作ると、
+   * 再レンダーが挟まらないうちに連続実行された場合に同じ値から2回計算されてしまう)
+   * 古典的な stale closure 問題を避けている。
+   */
+  useEffect(() => {
+    if (isFirstThemeRenderRef.current) {
+      isFirstThemeRenderRef.current = false;
+      return;
+    }
+    const label = CHAT_THEME_OPTIONS.find((opt) => opt.value === chatTheme)?.label ?? chatTheme;
+    setThemeToast(label);
+    if (themeToastTimerRef.current !== null) {
+      window.clearTimeout(themeToastTimerRef.current);
+    }
+    themeToastTimerRef.current = window.setTimeout(() => {
+      setThemeToast(null);
+      themeToastTimerRef.current = null;
+    }, 1000);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatTheme]);
+
+  /**
+   * 配色テーマのアイコンボタン巡回切替(機能追加)。
+   * dark → navy → light → natural → dark … の順で即時反映し、設定画面と同じ保存先
+   * (saveAppSettings)に永続化する。切替直後にテーマ名を短時間トースト表示する(上のuseEffectで処理)。
+   * setAppSettingsを関数形式で呼び、更新関数の内側でprevから現在テーマ・次テーマを計算することで、
+   * 再レンダーが挟まらないまま連打された場合でも取りこぼしなく1段階ずつ進む。
+   */
+  const handleCycleTheme = () => {
+    setAppSettings((prev) => {
+      const currentTheme = resolveChatTheme(prev.chatTheme, prev.chatBackground);
+      const next = nextChatTheme(currentTheme);
+      const updated = { ...prev, chatTheme: next };
+      saveAppSettings(updated);
+      return updated;
+    });
+  };
 
   const room = rooms.find((r) => r.id === id);
 
@@ -308,9 +374,9 @@ export function RoomPage() {
       }
     >
       {/* 上部バー */}
-      <div className="flex flex-col gap-2 border-b border-zinc-800 pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+      <div className="relative flex flex-col gap-2 border-b border-[var(--chat-border)] bg-[var(--chat-surface)] pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <div className="min-w-0 sm:flex-1">
-          <h1 className="truncate text-lg font-bold text-zinc-100">{room.name}</h1>
+          <h1 className="truncate text-lg font-bold text-[var(--chat-heading-text)]">{room.name}</h1>
           <div className="mt-2">
             <MemberBar
               members={members}
@@ -327,15 +393,24 @@ export function RoomPage() {
         <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap sm:justify-end">
           <button
             type="button"
+            onClick={handleCycleTheme}
+            title="配色テーマを切り替え"
+            aria-label="配色テーマを切り替え"
+            className="rounded-md border border-[var(--chat-button-border)] px-3 py-1.5 text-xs text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
+          >
+            🎨
+          </button>
+          <button
+            type="button"
             onClick={() => setSidePanelOpen(true)}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+            className="rounded-md border border-[var(--chat-button-border)] px-3 py-1.5 text-xs text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
           >
             パネル
           </button>
           <button
             type="button"
             onClick={() => setStillPromptOpen(true)}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+            className="rounded-md border border-[var(--chat-button-border)] px-3 py-1.5 text-xs text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
           >
             スチル
           </button>
@@ -356,47 +431,77 @@ export function RoomPage() {
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+            className="rounded-md border border-[var(--chat-button-border)] px-3 py-1.5 text-xs text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
           >
             ルーム設定
           </button>
           <button
             type="button"
             onClick={() => setDeleteConfirmOpen(true)}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/10"
+            className="rounded-md border border-[var(--chat-button-border)] px-3 py-1.5 text-xs text-[var(--chat-danger-text)] hover:bg-red-500/10"
           >
             削除
           </button>
         </div>
+
+        {/* テーマ切替トースト(機能追加): 切り替えた瞬間だけ現在のテーマ名を短時間表示する */}
+        {themeToast && (
+          <div
+            role="status"
+            className="pointer-events-none absolute right-0 top-full z-50 mt-1 rounded-md border border-[var(--chat-border)] bg-[var(--chat-surface)] px-2.5 py-1 text-xs text-[var(--chat-heading-text)] shadow-lg"
+          >
+            配色テーマ: {themeToast}
+          </div>
+        )}
       </div>
 
       {/* 中央: チャットログ */}
       <div className="flex-1 overflow-y-auto py-3">
         {error && (
-          <ErrorBanner message={error.message} kind={error.kind} onDismiss={() => setError(null)} />
+          <ErrorBanner
+            message={error.message}
+            kind={error.kind}
+            onDismiss={() => setError(null)}
+            theme={chatTheme}
+          />
         )}
 
         {/* pinned記憶と新記憶の矛盾: 自動では無効化せず、ユーザーに確認を出す(仕様書6.3) */}
+        {/* light/naturalの明るいサーフェスでも読めるよう、暗背景専用の半透明amberを避けてテーマごとに配色を分ける */}
         {pinnedConflicts.map((conflict, index) => (
           <div
             key={`${conflict.pinnedMemoryId}-${index}`}
-            className="mb-2 rounded-md border border-amber-800 bg-amber-950/40 px-3 py-2 text-sm text-amber-100"
+            className={`mb-2 rounded-md border px-3 py-2 text-sm ${
+              isLightSurfaceTheme
+                ? "border-amber-300 bg-amber-50 text-amber-900"
+                : "border-amber-800 bg-amber-950/40 text-amber-100"
+            }`}
           >
             <p className="font-medium">固定された記憶と矛盾する新しい情報が見つかりました</p>
-            <p className="mt-1 text-xs text-amber-200/80">固定中: {conflict.pinnedContent}</p>
-            <p className="text-xs text-amber-200/80">新情報: {conflict.newContent}</p>
+            <p className={`mt-1 text-xs ${isLightSurfaceTheme ? "text-amber-800/80" : "text-amber-200/80"}`}>
+              固定中: {conflict.pinnedContent}
+            </p>
+            <p className={`text-xs ${isLightSurfaceTheme ? "text-amber-800/80" : "text-amber-200/80"}`}>
+              新情報: {conflict.newContent}
+            </p>
             <div className="mt-2 flex gap-2">
               <button
                 type="button"
                 onClick={() => resolvePinnedConflict(conflict, true)}
-                className="rounded-md border border-amber-700 px-2 py-1 text-xs text-amber-200 hover:bg-amber-500/10"
+                className={`rounded-md border px-2 py-1 text-xs ${
+                  isLightSurfaceTheme
+                    ? "border-amber-400 text-amber-900 hover:bg-amber-500/10"
+                    : "border-amber-700 text-amber-200 hover:bg-amber-500/10"
+                }`}
               >
                 固定記憶を無効化する
               </button>
               <button
                 type="button"
                 onClick={() => resolvePinnedConflict(conflict, false)}
-                className="rounded-md px-2 py-1 text-xs text-amber-300/70 hover:text-amber-100"
+                className={`rounded-md px-2 py-1 text-xs ${
+                  isLightSurfaceTheme ? "text-amber-700/80 hover:text-amber-900" : "text-amber-300/70 hover:text-amber-100"
+                }`}
               >
                 固定記憶をそのまま残す
               </button>
@@ -406,12 +511,12 @@ export function RoomPage() {
 
         {messages.length === 0 && !generating && !autoGenerating && (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
-            <p className="text-zinc-500">まだ会話がありません。</p>
-            <p className="max-w-sm text-sm text-zinc-600">
+            <p className="text-[var(--chat-muted-text)]">まだ会話がありません。</p>
+            <p className="max-w-sm text-sm text-[var(--chat-placeholder-text)]">
               下の入力欄からトピックを投入するか発言してみましょう。トピックを投入すると、その話題でキャラたちが話し始めます。
             </p>
             {room.worldSetting && (
-              <p className="mt-2 max-w-md whitespace-pre-wrap text-xs text-zinc-600">
+              <p className="mt-2 max-w-md whitespace-pre-wrap text-xs text-[var(--chat-placeholder-text)]">
                 世界観メモ: {room.worldSetting}
               </p>
             )}
