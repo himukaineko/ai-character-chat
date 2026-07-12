@@ -12,7 +12,7 @@ import type {
   UserProfile,
   World,
 } from "../types";
-import { loadUserProfile, saveUserProfile } from "./settings";
+import { defaultUserProfile, loadUserProfile, saveUserProfile } from "./settings";
 
 /** Blobフィールドをbase64文字列に変換したキャラクター(エクスポート用) */
 type ExportedCharacter = Omit<Character, "iconImage" | "portraitImage" | "galleryImages"> & {
@@ -50,6 +50,22 @@ export interface CharactersOnlyExportData {
   format: "characters-only";
   version: 1;
   exportedAt: number;
+  characters: ExportedCharacter[];
+}
+
+/**
+ * ワールド単位エクスポートファイルの形式。
+ * 所属キャラ・キャラ同士の関係(方向つき情報を含む)を1ファイルにまとめて共有する用途。
+ * チャット内容・ルーム・記憶・要約・APIキーは一切含めない。
+ * ユーザープロフィールも含めない(共有相手にユーザー個人のペルソナ情報を渡さないため。
+ * useCustomUserProfileはfalse、userProfileは空のデフォルト値で書き出す)。
+ * formatマーカーで他形式と区別する。
+ */
+export interface WorldExportData {
+  format: "world";
+  version: 1;
+  exportedAt: number;
+  world: World;
   characters: ExportedCharacter[];
 }
 
@@ -183,14 +199,49 @@ export async function exportCharactersToFile(characterIds?: string[]): Promise<v
   }
 }
 
+/**
+ * ワールド(所属キャラ・キャラ同士の関係込み)をエクスポート用オブジェクトに組み立てる。
+ * ユーザープロフィールは含めない(useCustomUserProfile=false、userProfileは空のデフォルト値)。
+ */
+export async function buildWorldExportData(worldId: string): Promise<WorldExportData> {
+  const world = await db.worlds.get(worldId);
+  if (!world) {
+    throw new Error("ワールドが見つかりません");
+  }
+  const allCharacters = await db.characters.toArray();
+  const targets = allCharacters.filter((c) => world.characterIds.includes(c.id));
+
+  return {
+    format: "world",
+    version: 1,
+    exportedAt: Date.now(),
+    world: {
+      ...world,
+      // 共有相手にユーザー個人のペルソナ情報を渡さないため、ワールド専用ユーザー設定は書き出さない
+      useCustomUserProfile: false,
+      userProfile: defaultUserProfile(),
+    },
+    characters: await serializeCharacters(targets),
+  };
+}
+
+/** ワールドをJSONファイルとしてダウンロードさせる(ファイル名にワールド名を含める) */
+export async function exportWorldToFile(worldId: string): Promise<void> {
+  const data = await buildWorldExportData(worldId);
+  const dateStr = dateOnly(data.exportedAt);
+  const name = sanitizeForFilename(data.world.name || "ワールド");
+  downloadJson(data, `world_${name}_${dateStr}.json`);
+}
+
 /** インポートファイルをパースした結果(形式マーカーで判別する) */
 export type ParsedImportFile =
   | { kind: "full"; data: ExportData }
-  | { kind: "charactersOnly"; data: CharactersOnlyExportData };
+  | { kind: "charactersOnly"; data: CharactersOnlyExportData }
+  | { kind: "world"; data: WorldExportData };
 
 /**
- * JSON文字列をパースし、全データ形式/キャラのみ形式のどちらかを判別して返す(最低限の形チェック)。
- * キャラのみ形式は format: "characters-only" マーカーで判別する。
+ * JSON文字列をパースし、全データ形式/キャラのみ形式/ワールド形式のいずれかを判別して返す(最低限の形チェック)。
+ * キャラのみ形式は format: "characters-only"、ワールド形式は format: "world" マーカーで判別する。
  */
 export function parseImportFile(json: string): ParsedImportFile {
   const parsed = JSON.parse(json) as Record<string, unknown>;
@@ -203,6 +254,13 @@ export function parseImportFile(json: string): ParsedImportFile {
       throw new Error("バックアップファイルの形式が正しくありません");
     }
     return { kind: "charactersOnly", data: parsed as unknown as CharactersOnlyExportData };
+  }
+
+  if (parsed.format === "world") {
+    if (!parsed.world || typeof parsed.world !== "object" || !Array.isArray(parsed.characters)) {
+      throw new Error("バックアップファイルの形式が正しくありません");
+    }
+    return { kind: "world", data: parsed as unknown as WorldExportData };
   }
 
   if (!Array.isArray(parsed.characters) || !Array.isArray(parsed.rooms)) {
@@ -389,4 +447,67 @@ export async function importCharactersOnly(
 
   await db.characters.bulkAdd(characters);
   return characters.length;
+}
+
+/**
+ * ワールド(所属キャラ・キャラ同士の関係込み)を取り込む。常に「追加」として動作する(置き換えは行わない)。
+ * キャラのIDが既存と衝突する場合は新しいuuidを振り直し、world.characterIds・relationsの
+ * characterIdA/Bも振り直し後のIDに必ず追従させる。ワールドのIDが衝突する場合も同様に振り直す。
+ * createdAt/updatedAtはインポート時刻に更新する。
+ * ユーザープロフィールは取り込まない(念のため、ここでも空のデフォルト値に強制する)。
+ * 戻り値は追加したワールド名と追加したキャラクター数。
+ */
+export async function importWorld(
+  data: WorldExportData,
+): Promise<{ worldName: string; characterCount: number }> {
+  const existingCharacterIds = new Set((await db.characters.toArray()).map((c) => c.id));
+  const existingWorldIds = new Set((await db.worlds.toArray()).map((w) => w.id));
+  const now = Date.now();
+
+  // キャラのID衝突を振り直し、旧ID→新IDの対応表を作る(world側の追従に使う)
+  const characterIdMap = new Map<string, string>();
+  const characters: Character[] = await Promise.all(
+    data.characters.map(async (c) => {
+      const { iconImage, portraitImage, galleryImages, ...rest } = c;
+      const newId = existingCharacterIds.has(rest.id) ? generateId() : rest.id;
+      existingCharacterIds.add(newId);
+      characterIdMap.set(rest.id, newId);
+      return {
+        ...rest,
+        id: newId,
+        createdAt: now,
+        updatedAt: now,
+        iconImage: iconImage ? await dataUrlToBlob(iconImage) : undefined,
+        portraitImage: portraitImage ? await dataUrlToBlob(portraitImage) : undefined,
+        galleryImages:
+          galleryImages && galleryImages.length > 0
+            ? await Promise.all(galleryImages.map((s) => dataUrlToBlob(s)))
+            : undefined,
+      } as Character;
+    }),
+  );
+
+  const newWorldId = existingWorldIds.has(data.world.id) ? generateId() : data.world.id;
+  const world: World = {
+    ...data.world,
+    id: newWorldId,
+    characterIds: data.world.characterIds.map((cid) => characterIdMap.get(cid) ?? cid),
+    relations: data.world.relations.map((r) => ({
+      ...r,
+      characterIdA: characterIdMap.get(r.characterIdA) ?? r.characterIdA,
+      characterIdB: characterIdMap.get(r.characterIdB) ?? r.characterIdB,
+    })),
+    // 念のため、取り込んだファイルにユーザープロフィールが含まれていても無視する
+    useCustomUserProfile: false,
+    userProfile: defaultUserProfile(),
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await db.transaction("rw", [db.characters, db.worlds], async () => {
+    if (characters.length > 0) await db.characters.bulkAdd(characters);
+    await db.worlds.add(world);
+  });
+
+  return { worldName: world.name, characterCount: characters.length };
 }

@@ -27,9 +27,11 @@ import {
   exportCharactersToFile,
   importFromData,
   importCharactersOnly,
+  importWorld,
   parseImportFile,
   type ExportData,
   type CharactersOnlyExportData,
+  type WorldExportData,
 } from "../lib/exportImport";
 
 export function SettingsPage() {
@@ -51,9 +53,11 @@ export function SettingsPage() {
   const [pendingImport, setPendingImport] = useState<ExportData | null>(null);
   const [pendingCharactersImport, setPendingCharactersImport] =
     useState<CharactersOnlyExportData | null>(null);
+  const [pendingWorldImport, setPendingWorldImport] = useState<WorldExportData | null>(null);
   const [modeDialogOpen, setModeDialogOpen] = useState(false);
   const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
   const [charactersImportConfirmOpen, setCharactersImportConfirmOpen] = useState(false);
+  const [worldImportConfirmOpen, setWorldImportConfirmOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importDone, setImportDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -109,6 +113,9 @@ export function SettingsPage() {
       if (parsed.kind === "charactersOnly") {
         setPendingCharactersImport(parsed.data);
         setCharactersImportConfirmOpen(true);
+      } else if (parsed.kind === "world") {
+        setPendingWorldImport(parsed.data);
+        setWorldImportConfirmOpen(true);
       } else {
         setPendingImport(parsed.data);
         setModeDialogOpen(true);
@@ -149,6 +156,22 @@ export function SettingsPage() {
       setImporting(false);
       setPendingCharactersImport(null);
       setCharactersImportConfirmOpen(false);
+    }
+  };
+
+  const runWorldImport = async () => {
+    if (!pendingWorldImport) return;
+    setImporting(true);
+    try {
+      await importWorld(pendingWorldImport);
+      await loadAll();
+      setImportDone(true);
+    } catch {
+      setImportError("インポート中にエラーが発生しました。");
+    } finally {
+      setImporting(false);
+      setPendingWorldImport(null);
+      setWorldImportConfirmOpen(false);
     }
   };
 
@@ -639,6 +662,22 @@ export function SettingsPage() {
           setPendingCharactersImport(null);
         }}
         onConfirm={runCharactersImport}
+      />
+
+      {/* ワールドインポートの確認ダイアログ(常に「追加」) */}
+      <ConfirmDialog
+        open={worldImportConfirmOpen}
+        title="ワールドを追加しますか?"
+        message={`ワールド「${pendingWorldImport?.world.name ?? ""}」とキャラクター${
+          pendingWorldImport?.characters.length ?? 0
+        }体を追加します。既存のデータはそのまま残ります。`}
+        confirmLabel="追加する"
+        danger={false}
+        onCancel={() => {
+          setWorldImportConfirmOpen(false);
+          setPendingWorldImport(null);
+        }}
+        onConfirm={runWorldImport}
       />
     </div>
   );

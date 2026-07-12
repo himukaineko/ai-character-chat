@@ -252,6 +252,9 @@ export function HelpPage() {
               キャラクターだけを共有したいときは、<Tag>キャラのみエクスポート</Tag>やライブラリの各キャラの
               <Tag>エクスポート</Tag>を使います。
             </Bullet>
+            <Bullet>
+              ワールドごと共有したいときは、<Tag>ライブラリ</Tag>でワールドを選んで<Tag>エクスポート</Tag>を使うと、所属キャラとキャラ同士の関係性ごとまとめて1つのファイルで共有できます(あなたのユーザー設定は含まれません)。
+            </Bullet>
             <Bullet>APIキーは、どのエクスポートにも含まれません。</Bullet>
           </BulletList>
           <div className="mt-3">

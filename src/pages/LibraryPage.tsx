@@ -8,7 +8,7 @@ import { CharacterAvatar } from "../components/CharacterAvatar";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { WorldFormModal } from "../components/WorldFormModal";
 import { GroupAssistModal } from "../components/GroupAssistModal";
-import { exportCharactersToFile } from "../lib/exportImport";
+import { exportCharactersToFile, exportWorldToFile } from "../lib/exportImport";
 
 export function LibraryPage() {
   const characters = useAppStore((s) => s.characters);
@@ -24,6 +24,7 @@ export function LibraryPage() {
   const [editing, setEditing] = useState<Character | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Character | null>(null);
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [exportingWorldId, setExportingWorldId] = useState<string | null>(null);
   const [groupAssistOpen, setGroupAssistOpen] = useState(false);
 
   // ワールドタブによるフォルダ分け("all"ならすべてのキャラを表示)
@@ -64,6 +65,15 @@ export function LibraryPage() {
       await exportCharactersToFile([c.id]);
     } finally {
       setExportingId(null);
+    }
+  };
+
+  const handleExportWorld = async (w: World) => {
+    setExportingWorldId(w.id);
+    try {
+      await exportWorldToFile(w.id);
+    } finally {
+      setExportingWorldId(null);
     }
   };
 
@@ -139,6 +149,15 @@ export function LibraryPage() {
             className="text-xs text-indigo-400 hover:underline"
           >
             ワールドを編集
+          </button>
+          <button
+            type="button"
+            onClick={() => handleExportWorld(selectedWorld)}
+            disabled={exportingWorldId === selectedWorld.id}
+            title="所属キャラと関係性ごと共有できます(会話ログ・記憶・あなたのユーザー設定は含まれません)"
+            className="text-xs text-indigo-400 hover:underline disabled:opacity-50"
+          >
+            {exportingWorldId === selectedWorld.id ? "書き出し中…" : "エクスポート"}
           </button>
           <button
             type="button"
