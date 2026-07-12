@@ -90,7 +90,7 @@ export function Nav() {
             key={item.to}
             to={item.to}
             end={item.to === "/"}
-            className={linkClass + " flex-1"}
+            className={(state) => linkClass(state) + " flex-1"}
           >
             <NavIcon>{item.icon}</NavIcon>
             <span>{item.label}</span>
