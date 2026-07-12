@@ -13,6 +13,7 @@ import { ChatInput } from "../components/room/ChatInput";
 import { AUTO_GENERATE_MAX_COUNT } from "../lib/autoGenerate";
 import { SidePanel } from "../components/room/SidePanel";
 import { LogManageMenu } from "../components/room/LogManageMenu";
+import { ImageIcon, PanelIcon, SettingsIcon, ThemeIcon, TrashIcon } from "../components/room/RoomBarIcons";
 import { ErrorBanner } from "../components/room/ErrorBanner";
 import { StillPromptModal } from "../components/room/StillPromptModal";
 import {
@@ -390,29 +391,35 @@ export function RoomPage() {
             />
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap sm:justify-end">
+        <div className="flex flex-nowrap items-center gap-1 sm:shrink-0 sm:gap-2 sm:justify-end">
           <button
             type="button"
             onClick={handleCycleTheme}
             title="配色テーマを切り替え"
             aria-label="配色テーマを切り替え"
-            className="rounded-md border border-[var(--chat-button-border)] px-3 py-1.5 text-xs text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--chat-button-border)] text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
           >
-            🎨
+            <ThemeIcon className="h-5 w-5" />
           </button>
           <button
             type="button"
             onClick={() => setSidePanelOpen(true)}
-            className="rounded-md border border-[var(--chat-button-border)] px-3 py-1.5 text-xs text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
+            title="パネル"
+            aria-label="パネル"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--chat-button-border)] text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)] sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs"
           >
-            パネル
+            <PanelIcon className="h-5 w-5 shrink-0" />
+            <span className="hidden sm:inline">パネル</span>
           </button>
           <button
             type="button"
             onClick={() => setStillPromptOpen(true)}
-            className="rounded-md border border-[var(--chat-button-border)] px-3 py-1.5 text-xs text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
+            title="スチル"
+            aria-label="スチル"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--chat-button-border)] text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)] sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs"
           >
-            スチル
+            <ImageIcon className="h-5 w-5 shrink-0" />
+            <span className="hidden sm:inline">スチル</span>
           </button>
           <LogManageMenu
             onDeleteLogOnly={async () => {
@@ -431,16 +438,22 @@ export function RoomPage() {
           <button
             type="button"
             onClick={() => setSettingsOpen(true)}
-            className="rounded-md border border-[var(--chat-button-border)] px-3 py-1.5 text-xs text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
+            title="ルーム設定"
+            aria-label="ルーム設定"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--chat-button-border)] text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)] sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs"
           >
-            ルーム設定
+            <SettingsIcon className="h-5 w-5 shrink-0" />
+            <span className="hidden sm:inline">ルーム設定</span>
           </button>
           <button
             type="button"
             onClick={() => setDeleteConfirmOpen(true)}
-            className="rounded-md border border-[var(--chat-button-border)] px-3 py-1.5 text-xs text-[var(--chat-danger-text)] hover:bg-red-500/10"
+            title="削除"
+            aria-label="削除"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--chat-button-border)] text-[var(--chat-danger-text)] hover:bg-red-500/10 sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs"
           >
-            削除
+            <TrashIcon className="h-5 w-5 shrink-0" />
+            <span className="hidden sm:inline">削除</span>
           </button>
         </div>
 

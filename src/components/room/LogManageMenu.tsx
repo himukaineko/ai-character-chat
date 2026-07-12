@@ -2,6 +2,7 @@
 // ログのみ削除 / ログ+要約を削除 / ルーム完全リセット。いずれも確認ダイアログ必須。
 import { useState } from "react";
 import { ConfirmDialog } from "../ConfirmDialog";
+import { ListIcon } from "./RoomBarIcons";
 
 type DeleteStage = "logOnly" | "logAndSummary" | "resetAll" | null;
 
@@ -35,9 +36,12 @@ export function LogManageMenu({
       <button
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
-        className="rounded-md border border-[var(--chat-button-border)] px-3 py-1.5 text-xs text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
+        title="ログ管理"
+        aria-label="ログ管理"
+        className="flex h-10 w-10 items-center justify-center rounded-md border border-[var(--chat-button-border)] text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)] sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs"
       >
-        ログ管理
+        <ListIcon className="h-5 w-5 shrink-0" />
+        <span className="hidden sm:inline">ログ管理</span>
       </button>
       {menuOpen && (
         <>
