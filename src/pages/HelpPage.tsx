@@ -203,6 +203,9 @@ export function HelpPage() {
             <Bullet>
               ルーム設定の<Tag>返事の長さ</Tag>で、短め〜長めにボリュームを調整できます。
             </Bullet>
+            <Bullet>
+              ルーム設定の<Tag>表紙イラスト</Tag>で画像を1枚設定すると、ホーム画面のルームカードに本の表紙のように表示されます。
+            </Bullet>
           </BulletList>
         </AccordionSection>
 

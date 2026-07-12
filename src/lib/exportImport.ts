@@ -21,12 +21,21 @@ type ExportedCharacter = Omit<Character, "iconImage" | "portraitImage" | "galler
   galleryImages?: string[];
 };
 
+/**
+ * Blobフィールド(表紙イラスト)をbase64文字列に変換したルーム(エクスポート用)。
+ * BlobのままJSON.stringifyすると画像が失われるため、キャラクターと同様にdata URLへ直列化する。
+ * 旧形式ファイル(coverImageフィールドを持たない)もこの型のまま読める(undefined扱い)。
+ */
+type ExportedRoom = Omit<Room, "coverImage"> & {
+  coverImage?: string;
+};
+
 /** エクスポートファイルの形式(全データ) */
 export interface ExportData {
   formatVersion: 1;
   exportedAt: number;
   characters: ExportedCharacter[];
-  rooms: Room[];
+  rooms: ExportedRoom[];
   roomCharacterStates: RoomCharacterState[];
   messages: Message[];
   memories: Memory[];
@@ -103,6 +112,35 @@ async function serializeCharacters(characters: Character[]): Promise<ExportedCha
   );
 }
 
+/** ルーム配列をエクスポート用(表紙イラストのBlob→data URL変換済み)の配列に変換する */
+async function serializeRooms(rooms: Room[]): Promise<ExportedRoom[]> {
+  return Promise.all(
+    rooms.map(async (room) => {
+      const { coverImage, ...rest } = room;
+      return {
+        ...rest,
+        coverImage: coverImage ? await blobToDataUrl(coverImage) : undefined,
+      };
+    }),
+  );
+}
+
+/**
+ * エクスポート用ルーム配列をDB保存用(data URL→Blob復元済み)の配列に変換する。
+ * 旧形式ファイル(coverImageなし)はそのまま表紙なしとして復元する(後方互換)。
+ */
+async function deserializeRooms(rooms: ExportedRoom[]): Promise<Room[]> {
+  return Promise.all(
+    rooms.map(async (room) => {
+      const { coverImage, ...rest } = room;
+      return {
+        ...rest,
+        coverImage: coverImage ? await dataUrlToBlob(coverImage) : undefined,
+      };
+    }),
+  );
+}
+
 /** JSONオブジェクトをファイルとしてダウンロードさせる */
 function downloadJson(data: unknown, filename: string): void {
   const json = JSON.stringify(data, null, 2);
@@ -131,12 +169,14 @@ export async function buildExportData(): Promise<ExportData> {
     ]);
 
   const exportedCharacters = await serializeCharacters(characters);
+  // 表紙イラスト(Blob)はJSONに直接入れられないため、data URLに変換してから書き出す
+  const exportedRooms = await serializeRooms(rooms);
 
   return {
     formatVersion: 1,
     exportedAt: Date.now(),
     characters: exportedCharacters,
-    rooms,
+    rooms: exportedRooms,
     roomCharacterStates,
     messages,
     memories,
@@ -292,6 +332,9 @@ export async function importFromData(data: ExportData, mode: ImportMode): Promis
     }),
   );
 
+  // 表紙イラストのdata URLをBlobに復元する(旧形式ファイル=coverImageなしは表紙なしのまま)
+  const rooms: Room[] = await deserializeRooms(data.rooms);
+
   // 旧形式ファイル(worldsフィールドなし)にも対応する: undefined → 空配列として扱う
   const importedWorlds = data.worlds ?? [];
 
@@ -318,7 +361,7 @@ export async function importFromData(data: ExportData, mode: ImportMode): Promis
           db.worlds.clear(),
         ]);
         await db.characters.bulkAdd(characters);
-        await db.rooms.bulkAdd(data.rooms);
+        await db.rooms.bulkAdd(rooms);
         await db.roomCharacterStates.bulkAdd(data.roomCharacterStates);
         await db.messages.bulkAdd(data.messages);
         await db.memories.bulkAdd(data.memories);
@@ -351,7 +394,7 @@ export async function importFromData(data: ExportData, mode: ImportMode): Promis
         });
 
         const roomIdMap = new Map<string, string>();
-        const remappedRooms = data.rooms.map((r) => {
+        const remappedRooms = rooms.map((r) => {
           const newId = generateId();
           roomIdMap.set(r.id, newId);
           return {

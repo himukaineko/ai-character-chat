@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Character, NarrationLevel, ReplyLength, Room, World } from "../types";
 import { resolveReplyLength } from "../types";
 import type { RoomInput } from "../lib/rooms";
+import { useBlobUrl } from "../lib/useBlobUrl";
 
 interface RoomFormModalProps {
   open: boolean;
@@ -40,7 +41,81 @@ function emptyForm(): RoomInput {
     memberIds: [],
     replyLength: "normal",
     worldId: undefined,
+    coverImage: undefined,
   };
+}
+
+/**
+ * 表紙イラスト(任意)の編集欄。
+ * GalleryImagesFieldと同じくトリミングは行わず、選んだ画像をそのまま1枚保存する。
+ * 「削除」でundefinedに戻すと保存時に表紙なしへ更新される。
+ */
+function CoverImageField({
+  coverImage,
+  onChange,
+}: {
+  coverImage: Blob | undefined;
+  onChange: (blob: Blob | undefined) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const url = useBlobUrl(coverImage);
+
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-[var(--chat-button-text,#d4d4d8)]">
+        表紙イラスト(任意)
+      </label>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          // トリミング不要でそのまま保存する(fileそのものがBlob)
+          if (file) onChange(file);
+          e.target.value = "";
+        }}
+      />
+      {coverImage ? (
+        <div>
+          <div className="overflow-hidden rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#27272a)]">
+            {url && (
+              <img src={url} alt="表紙イラストのプレビュー" className="h-28 w-full object-cover" />
+            )}
+          </div>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="rounded-md border border-[var(--chat-button-border,#3f3f46)] px-2.5 py-1 text-xs text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
+            >
+              画像を変更
+            </button>
+            <button
+              type="button"
+              onClick={() => onChange(undefined)}
+              className="rounded-md border border-[var(--chat-button-border,#3f3f46)] px-2.5 py-1 text-xs text-[var(--chat-danger-text,#f87171)] hover:bg-[var(--chat-input-bg,#27272a)]"
+            >
+              削除
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="flex h-20 w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-[var(--chat-button-border,#52525b)] text-xs text-[var(--chat-placeholder-text,#a1a1aa)] hover:border-indigo-500 hover:text-[var(--chat-accent-text,#a5b4fc)]"
+        >
+          <span className="text-lg leading-none">＋</span>
+          <span>画像を追加</span>
+        </button>
+      )}
+      <p className="mt-1 text-xs text-[var(--chat-placeholder-text,#71717a)]">
+        トリミングせずそのまま登録され、ホーム画面のルームカードに表紙として表示されます。
+      </p>
+    </div>
+  );
 }
 
 export function RoomFormModal({
@@ -69,6 +144,8 @@ export function RoomFormModal({
         replyLength: resolveReplyLength(room.replyLength),
         // 既存ルームはworldIdを持たない場合がある(未紐づけ扱い)
         worldId: room.worldId,
+        // 既存ルームはcoverImageを持たない場合がある(表紙なし扱い)
+        coverImage: room.coverImage,
       });
     } else {
       setForm(emptyForm());
@@ -165,6 +242,11 @@ export function RoomFormModal({
               className="w-full resize-none rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#27272a)] px-3 py-2 text-sm text-[var(--chat-input-text,#f4f4f5)] outline-none placeholder:text-[var(--chat-placeholder-text,#71717a)] focus:border-indigo-500"
             />
           </div>
+
+          <CoverImageField
+            coverImage={form.coverImage}
+            onChange={(blob) => setForm((f) => ({ ...f, coverImage: blob }))}
+          />
 
           {worlds.length > 0 && (
             <div>

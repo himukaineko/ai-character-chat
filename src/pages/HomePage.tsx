@@ -7,6 +7,7 @@ import { RoomFormModal } from "../components/RoomFormModal";
 import { CharacterAvatar } from "../components/CharacterAvatar";
 import { getRoomSummaries, type RoomSummary } from "../lib/messages";
 import { loadLastRoomId, loadUserProfile } from "../lib/settings";
+import { useBlobUrl } from "../lib/useBlobUrl";
 import type { Character, Message, Room, World } from "../types";
 
 function formatUpdatedAt(timestamp: number): string {
@@ -103,21 +104,33 @@ function RoomCard({
 }) {
   const preview = formatPreview(summary?.lastMessage ?? null, userDisplayName);
   const count = summary?.count ?? 0;
+  // 表紙イラスト(機能追加)。既存ルームはcoverImageを持たない場合があるため、無ければ従来どおりの見た目
+  const coverUrl = useBlobUrl(room.coverImage);
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex min-w-0 flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-900 p-4 text-left transition-colors hover:border-zinc-600"
+      className="flex min-w-0 flex-col overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900 text-left transition-colors hover:border-zinc-600"
     >
-      <h2 className="min-w-0 truncate text-base font-semibold text-zinc-100">
-        {room.name || "(名称未設定)"}
-      </h2>
-      <MemberAvatars memberIds={room.memberIds} charactersById={charactersById} size={28} />
-      <p className="min-w-0 truncate text-xs text-zinc-400">{preview}</p>
-      <div className="flex items-center justify-between text-xs text-zinc-500">
-        <span>更新: {formatUpdatedAt(room.updatedAt)}</span>
-        {count > 0 && <span>{count}件</span>}
+      {coverUrl && (
+        <img
+          src={coverUrl}
+          alt=""
+          className="h-28 w-full shrink-0 object-cover"
+          loading="lazy"
+        />
+      )}
+      <div className="flex min-w-0 flex-col gap-3 p-4">
+        <h2 className="min-w-0 truncate text-base font-semibold text-zinc-100">
+          {room.name || "(名称未設定)"}
+        </h2>
+        <MemberAvatars memberIds={room.memberIds} charactersById={charactersById} size={28} />
+        <p className="min-w-0 truncate text-xs text-zinc-400">{preview}</p>
+        <div className="flex items-center justify-between text-xs text-zinc-500">
+          <span>更新: {formatUpdatedAt(room.updatedAt)}</span>
+          {count > 0 && <span>{count}件</span>}
+        </div>
       </div>
     </button>
   );
@@ -139,6 +152,8 @@ function ContinueCard({
   onClick: () => void;
 }) {
   const preview = formatPreview(summary?.lastMessage ?? null, userDisplayName);
+  // 表紙イラスト(機能追加)。あれば背景として敷き、暗めのグラデーションで文字の可読性を守る
+  const coverUrl = useBlobUrl(room.coverImage);
 
   return (
     <div>
@@ -146,9 +161,26 @@ function ContinueCard({
       <button
         type="button"
         onClick={onClick}
-        className="flex w-full flex-col gap-3 rounded-xl border border-indigo-700/50 bg-gradient-to-br from-indigo-950/40 to-zinc-900 p-5 text-left transition-colors hover:border-indigo-500 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+        className="relative flex w-full flex-col gap-3 overflow-hidden rounded-xl border border-indigo-700/50 bg-gradient-to-br from-indigo-950/40 to-zinc-900 p-5 text-left transition-colors hover:border-indigo-500 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
       >
-        <div className="min-w-0 flex-1">
+        {coverUrl && (
+          <>
+            <img
+              src={coverUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            {/* 表紙の上に暗めのグラデーションを重ねてテキストを保護する */}
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(to right, rgba(9,9,11,0.85), rgba(9,9,11,0.6))",
+              }}
+            />
+          </>
+        )}
+        <div className="relative min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="truncate text-lg font-bold text-zinc-100">
               {room.name || "(名称未設定)"}
@@ -161,7 +193,7 @@ function ContinueCard({
           </div>
           <p className="mt-2 truncate text-sm text-zinc-400">{preview}</p>
         </div>
-        <div className="shrink-0">
+        <div className="relative shrink-0">
           <MemberAvatars memberIds={room.memberIds} charactersById={charactersById} size={36} />
         </div>
       </button>
