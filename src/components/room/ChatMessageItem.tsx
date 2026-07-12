@@ -2,11 +2,12 @@
 // キャラ発言=左、ユーザー発言=右、narration=中央寄せ細字、topic=区切り線+ラベル。
 // メッセージ操作(ここまで戻る/削除/コピー)は「⋯」ボタンから開くメニューで提供する
 // (デスクトップはhoverで目立たせ、モバイルはボタン自体を常時タップ可能にすることで長押し相当の操作性を確保する)。
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import type { Character, Message } from "../../types";
 import { getCharacterGallery } from "../../types";
 import { CharacterAvatar } from "../CharacterAvatar";
 import { PortraitLightbox } from "../PortraitLightbox";
+import { calcDropdownStyle } from "../../lib/dropdownPosition";
 import { buildDisplaySegments, type MessageSegment } from "../../lib/messageSegments";
 import { copyTextToClipboard } from "../../lib/clipboard";
 
@@ -50,6 +51,9 @@ function SegmentBlocks({
 
 export function ChatMessageItem({ message, character, onRewind, onDelete }: ChatMessageItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  // はみ出し修正(モバイル対応): メニューはfixed配置+画面内クランプで表示する
+  // (短い発言の「⋯」ボタンは画面左寄りに来るため、右端揃えのままだと左に切れることがある)。
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
   const [lightboxOpen, setLightboxOpen] = useState(false);
   // 顔アイコン・イメージイラストのいずれも無いキャラはクリックしても開かない
   const hasPortraitAssets = !!(
@@ -66,10 +70,15 @@ export function ChatMessageItem({ message, character, onRewind, onDelete }: Chat
     <div className="relative shrink-0 self-start">
       <button
         type="button"
-        onClick={() => setMenuOpen((v) => !v)}
+        onClick={(e) => {
+          if (!menuOpen) {
+            setMenuStyle(calcDropdownStyle(e.currentTarget, { menuWidth: 144, direction: "down" }));
+          }
+          setMenuOpen((v) => !v);
+        }}
         // モバイルでのタップ領域確保(仕様外の見た目肥大を避けるため、視覚上のサイズは
         // 変えずflexで中央寄せし、実際のヒット領域を44px近くまで広げる)
-        className="flex h-11 w-11 items-center justify-center rounded-full text-xs text-[var(--chat-muted-text)] opacity-60 hover:bg-zinc-800/40 hover:text-zinc-100 hover:opacity-100"
+        className="flex h-11 w-11 items-center justify-center rounded-full text-xs text-[var(--chat-muted-text)] opacity-60 hover:bg-[var(--chat-input-bg,#27272a)] hover:text-[var(--chat-heading-text,#f4f4f5)] hover:opacity-100"
         aria-label="メッセージ操作"
       >
         ⋯
@@ -77,21 +86,25 @@ export function ChatMessageItem({ message, character, onRewind, onDelete }: Chat
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-1 w-36 rounded-lg border border-zinc-700 bg-zinc-900 p-1 text-sm shadow-xl">
+          {/* テーマ統一(機能修正): 黒固定をやめ、テーマのサーフェス色で表示する */}
+          <div
+            className="fixed z-50 rounded-lg border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#18181b)] p-1 text-sm shadow-xl"
+            style={menuStyle}
+          >
             <button
               type="button"
               onClick={() => {
                 setMenuOpen(false);
                 onRewind(message.id);
               }}
-              className="block w-full rounded-md px-2 py-1.5 text-left text-zinc-300 hover:bg-zinc-800"
+              className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
             >
               ここまで戻る
             </button>
             <button
               type="button"
               onClick={handleCopy}
-              className="block w-full rounded-md px-2 py-1.5 text-left text-zinc-300 hover:bg-zinc-800"
+              className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
             >
               コピー
             </button>
@@ -101,7 +114,7 @@ export function ChatMessageItem({ message, character, onRewind, onDelete }: Chat
                 setMenuOpen(false);
                 onDelete(message.id);
               }}
-              className="block w-full rounded-md px-2 py-1.5 text-left text-red-400 hover:bg-red-500/10"
+              className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--chat-danger-text,#f87171)] hover:bg-red-500/10"
             >
               削除
             </button>

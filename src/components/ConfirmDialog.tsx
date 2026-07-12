@@ -1,4 +1,9 @@
 // 破壊的操作(削除・置き換えなど)の前に必ず挟む確認ダイアログ
+//
+// 配色メモ(機能修正: フローティングUIのテーマ統一): ルーム画面ではCSS変数 var(--chat-*) を
+// 継承してテーマ(黒系/濃紺系/白系/ナチュラル系)に連動する。設定・ライブラリ等の
+// ダーク固定ページではテーマ変数が定義されていないため、フォールバック値(従来のダーク配色)で
+// これまでどおりの見た目になる。
 interface ConfirmDialogProps {
   open: boolean;
   title: string;
@@ -28,16 +33,16 @@ export function ConfirmDialog({
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-sm rounded-lg border border-zinc-700 bg-zinc-900 p-5 shadow-xl"
+        className="w-full max-w-sm rounded-lg border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#18181b)] p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-semibold text-zinc-100">{title}</h2>
-        <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-400">{message}</p>
+        <h2 className="text-base font-semibold text-[var(--chat-heading-text,#f4f4f5)]">{title}</h2>
+        <p className="mt-2 whitespace-pre-wrap text-sm text-[var(--chat-muted-text,#a1a1aa)]">{message}</p>
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+            className="rounded-md border border-[var(--chat-button-border,#3f3f46)] px-3 py-1.5 text-sm text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
           >
             {cancelLabel}
           </button>

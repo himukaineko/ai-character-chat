@@ -100,14 +100,17 @@ export function SidePanel({
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="flex-1 bg-black/50" onClick={onClose} />
-      <div className="flex h-full w-full max-w-sm flex-col border-l border-zinc-800 bg-zinc-950 shadow-2xl">
-        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-          <div className="flex gap-1 rounded-md border border-zinc-700 p-0.5 text-sm">
+      {/* テーマ統一(機能修正): 黒固定をやめ、テーマのサーフェス色で表示する */}
+      <div className="flex h-full w-full max-w-sm flex-col border-l border-[var(--chat-border,#27272a)] bg-[var(--chat-surface,#09090b)] shadow-2xl">
+        <div className="flex items-center justify-between border-b border-[var(--chat-border,#27272a)] px-4 py-3">
+          <div className="flex gap-1 rounded-md border border-[var(--chat-button-border,#3f3f46)] p-0.5 text-sm">
             <button
               type="button"
               onClick={() => setTab("members")}
               className={`rounded px-3 py-1 ${
-                tab === "members" ? "bg-indigo-600 text-white" : "text-zinc-400 hover:text-zinc-200"
+                tab === "members"
+                  ? "bg-indigo-600 text-white"
+                  : "text-[var(--chat-muted-text,#a1a1aa)] hover:text-[var(--chat-heading-text,#e4e4e7)]"
               }`}
             >
               メンバー
@@ -116,7 +119,9 @@ export function SidePanel({
               type="button"
               onClick={() => setTab("memory")}
               className={`rounded px-3 py-1 ${
-                tab === "memory" ? "bg-indigo-600 text-white" : "text-zinc-400 hover:text-zinc-200"
+                tab === "memory"
+                  ? "bg-indigo-600 text-white"
+                  : "text-[var(--chat-muted-text,#a1a1aa)] hover:text-[var(--chat-heading-text,#e4e4e7)]"
               }`}
             >
               記憶
@@ -125,7 +130,7 @@ export function SidePanel({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            className="rounded-md px-2 py-1 text-[var(--chat-muted-text,#a1a1aa)] hover:bg-[var(--chat-input-bg,#27272a)] hover:text-[var(--chat-heading-text,#e4e4e7)]"
           >
             閉じる
           </button>
@@ -134,18 +139,25 @@ export function SidePanel({
         <div className="flex-1 overflow-y-auto p-4">
           {tab === "members" && (
             <div className="space-y-3">
-              {members.length === 0 && <p className="text-sm text-zinc-500">メンバーがいません。</p>}
+              {members.length === 0 && (
+                <p className="text-sm text-[var(--chat-placeholder-text,#71717a)]">メンバーがいません。</p>
+              )}
               {members.map(({ character, state }) => (
-                <div key={character.id} className="rounded-lg border border-zinc-800 bg-zinc-900 p-3">
+                <div
+                  key={character.id}
+                  className="rounded-lg border border-[var(--chat-border,#27272a)] bg-[var(--chat-input-bg,#18181b)] p-3"
+                >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <CharacterAvatar character={character} size={32} />
-                      <span className="text-sm font-medium text-zinc-100">{character.name}</span>
+                      <span className="text-sm font-medium text-[var(--chat-heading-text,#f4f4f5)]">
+                        {character.name}
+                      </span>
                     </div>
                     <button
                       type="button"
                       onClick={() => onEditOverrides(character.id)}
-                      className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+                      className="rounded-md border border-[var(--chat-button-border,#3f3f46)] px-2 py-1 text-xs text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-surface,#27272a)]"
                     >
                       上書きを編集
                     </button>
@@ -158,8 +170,8 @@ export function SidePanel({
                         onClick={() => onChangePresence(character.id, opt.value)}
                         className={`rounded-md px-2 py-1 text-xs ${
                           state.presence === opt.value
-                            ? "bg-indigo-500/20 text-indigo-200"
-                            : "border border-zinc-700 text-zinc-400 hover:bg-zinc-800"
+                            ? "bg-indigo-500/20 text-[var(--chat-accent-text,#c7d2fe)]"
+                            : "border border-[var(--chat-button-border,#3f3f46)] text-[var(--chat-muted-text,#a1a1aa)] hover:bg-[var(--chat-surface,#27272a)]"
                         }`}
                       >
                         {opt.label}
@@ -167,7 +179,7 @@ export function SidePanel({
                     ))}
                   </div>
                   {Object.values(state.overrides).some((v) => v) && (
-                    <ul className="mt-2 list-inside list-disc text-xs text-zinc-400">
+                    <ul className="mt-2 list-inside list-disc text-xs text-[var(--chat-muted-text,#a1a1aa)]">
                       {state.overrides.occupation && <li>職業・立場: {state.overrides.occupation}</li>}
                       {state.overrides.relationToUser && (
                         <li>ユーザーとの関係: {state.overrides.relationToUser}</li>
@@ -183,40 +195,43 @@ export function SidePanel({
 
           {tab === "memory" && (
             <div className="space-y-4">
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-[var(--chat-placeholder-text,#71717a)]">
                 会話から自動抽出された記憶です。固定した記憶は自動整理の対象外になります。「昇格」でキャラ本体の設定に反映できます。
               </p>
 
               {/* 手動整理: 発言数がトリガーに達していなくても今すぐ要約+記憶抽出を実行する */}
-              <div className="rounded-md border border-zinc-800 bg-zinc-900 p-2">
+              <div className="rounded-md border border-[var(--chat-border,#27272a)] bg-[var(--chat-input-bg,#18181b)] p-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     disabled={!hasMessages || organizing}
                     onClick={() => void handleOrganize()}
-                    className="flex items-center gap-1.5 rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex items-center gap-1.5 rounded-md border border-[var(--chat-button-border,#3f3f46)] px-3 py-1.5 text-xs text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-surface,#27272a)] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {organizing && (
-                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-zinc-500 border-t-transparent" />
+                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-[var(--chat-placeholder-text,#71717a)] border-t-transparent" />
                     )}
                     {organizing ? "整理中…" : "記憶を整理"}
                   </button>
                   {organizeFeedback && (
-                    <span className="text-xs text-emerald-400">{organizeFeedback}</span>
+                    <span className="text-xs text-[var(--chat-success-text,#34d399)]">{organizeFeedback}</span>
                   )}
                 </div>
                 {!hasMessages && (
-                  <p className="mt-1 text-[11px] text-zinc-600">会話がまだ無いルームでは実行できません。</p>
+                  <p className="mt-1 text-[11px] text-[var(--chat-placeholder-text,#52525b)]">
+                    会話がまだ無いルームでは実行できません。
+                  </p>
                 )}
                 {organizeError && (
-                  <div className="mt-2 rounded-md border border-red-800 bg-red-950/50 px-2 py-1.5 text-[11px] text-red-200">
+                  // 半透明の赤はどのテーマの背景でも成立する。文字色だけテーマの危険色に連動させる
+                  <div className="mt-2 rounded-md border border-red-500/40 bg-red-500/10 px-2 py-1.5 text-[11px] text-[var(--chat-danger-text,#fecaca)]">
                     <p className="break-words">{organizeError.message}</p>
                     {(organizeError.kind === "missingKey" ||
                       organizeError.kind === "keyInvalid" ||
                       organizeError.kind === "permissionDenied") && (
                       <Link
                         to="/settings"
-                        className="mt-1 inline-block text-[11px] text-red-300 underline hover:text-red-100"
+                        className="mt-1 inline-block text-[11px] text-[var(--chat-danger-text,#fca5a5)] underline"
                       >
                         設定画面を開く
                       </Link>
@@ -288,9 +303,9 @@ function MemorySection({
 }) {
   return (
     <div>
-      <h3 className="mb-1 text-sm font-semibold text-zinc-300">{title}</h3>
+      <h3 className="mb-1 text-sm font-semibold text-[var(--chat-button-text,#d4d4d8)]">{title}</h3>
       {memories.length === 0 ? (
-        <p className="text-xs text-zinc-600">まだありません。</p>
+        <p className="text-xs text-[var(--chat-placeholder-text,#52525b)]">まだありません。</p>
       ) : (
         <ul className="space-y-1.5">
           {memories.map((m) => (
@@ -349,7 +364,7 @@ function MemoryRow({
 
   return (
     <li
-      className={`rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1.5 text-xs ${
+      className={`rounded-md border border-[var(--chat-border,#27272a)] bg-[var(--chat-input-bg,#18181b)] px-2 py-1.5 text-xs ${
         memory.disabled ? "opacity-60" : ""
       }`}
     >
@@ -359,7 +374,7 @@ function MemoryRow({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             rows={2}
-            className="w-full resize-none rounded-md border border-zinc-700 bg-zinc-800 px-2 py-1 text-xs text-zinc-100 outline-none focus:border-indigo-500"
+            className="w-full resize-none rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#27272a)] px-2 py-1 text-xs text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
           />
           <div className="mt-1 flex justify-end gap-1">
             <button
@@ -368,7 +383,7 @@ function MemoryRow({
                 setEditing(false);
                 setDraft(memory.content);
               }}
-              className="rounded px-2 py-0.5 text-zinc-500 hover:text-zinc-300"
+              className="rounded px-2 py-0.5 text-[var(--chat-placeholder-text,#71717a)] hover:text-[var(--chat-button-text,#d4d4d8)]"
             >
               キャンセル
             </button>
@@ -384,17 +399,29 @@ function MemoryRow({
         </div>
       ) : (
         <>
-          <p className={memory.disabled ? "text-zinc-600 line-through" : "text-zinc-300"}>
+          <p
+            className={
+              memory.disabled
+                ? "text-[var(--chat-placeholder-text,#52525b)] line-through"
+                : "text-[var(--chat-button-text,#d4d4d8)]"
+            }
+          >
             {memory.content}
           </p>
           <div className="mt-1 flex items-center justify-between gap-1">
-            <span className="truncate text-[10px] text-zinc-600">関連: {subjectNames || "-"}</span>
+            <span className="truncate text-[10px] text-[var(--chat-placeholder-text,#52525b)]">
+              関連: {subjectNames || "-"}
+            </span>
             <span className="flex shrink-0 items-center gap-0.5">
               {memory.pinned && (
-                <span className="rounded bg-amber-500/20 px-1 text-[10px] text-amber-300">固定</span>
+                <span className="rounded bg-amber-500/20 px-1 text-[10px] text-[var(--chat-warning-text,#fcd34d)]">
+                  固定
+                </span>
               )}
               {memory.disabled && (
-                <span className="rounded bg-zinc-800 px-1 text-[10px] text-zinc-500">無効</span>
+                <span className="rounded border border-[var(--chat-border,#27272a)] px-1 text-[10px] text-[var(--chat-placeholder-text,#71717a)]">
+                  無効
+                </span>
               )}
             </span>
           </div>
@@ -405,7 +432,7 @@ function MemoryRow({
                 setDraft(memory.content);
                 setEditing(true);
               }}
-              className="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:bg-zinc-800"
+              className="rounded border border-[var(--chat-button-border,#3f3f46)] px-1.5 py-0.5 text-[10px] text-[var(--chat-muted-text,#a1a1aa)] hover:bg-[var(--chat-surface,#27272a)]"
             >
               編集
             </button>
@@ -414,8 +441,8 @@ function MemoryRow({
               onClick={handleTogglePin}
               className={`rounded border px-1.5 py-0.5 text-[10px] ${
                 memory.pinned
-                  ? "border-amber-600 text-amber-300 hover:bg-amber-500/10"
-                  : "border-zinc-700 text-zinc-400 hover:bg-zinc-800"
+                  ? "border-amber-600 text-[var(--chat-warning-text,#fcd34d)] hover:bg-amber-500/10"
+                  : "border-[var(--chat-button-border,#3f3f46)] text-[var(--chat-muted-text,#a1a1aa)] hover:bg-[var(--chat-surface,#27272a)]"
               }`}
             >
               {memory.pinned ? "固定解除" : "固定"}
@@ -424,7 +451,7 @@ function MemoryRow({
               <button
                 type="button"
                 onClick={() => onPromote(memory)}
-                className="rounded border border-indigo-700 px-1.5 py-0.5 text-[10px] text-indigo-300 hover:bg-indigo-500/10"
+                className="rounded border border-indigo-700 px-1.5 py-0.5 text-[10px] text-[var(--chat-accent-text,#a5b4fc)] hover:bg-indigo-500/10"
               >
                 キャラ設定に昇格
               </button>
@@ -432,7 +459,7 @@ function MemoryRow({
             <button
               type="button"
               onClick={() => onDelete(memory)}
-              className="rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-red-400 hover:bg-red-500/10"
+              className="rounded border border-[var(--chat-button-border,#3f3f46)] px-1.5 py-0.5 text-[10px] text-[var(--chat-danger-text,#f87171)] hover:bg-red-500/10"
             >
               削除
             </button>
@@ -481,23 +508,24 @@ function PromoteDialog({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      {/* テーマ統一(機能修正): 黒固定をやめ、テーマのサーフェス色で表示する */}
       <div
-        className="w-full max-w-sm rounded-lg border border-zinc-700 bg-zinc-900 p-5 shadow-xl"
+        className="w-full max-w-sm rounded-lg border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#18181b)] p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         {!confirming ? (
           <>
-            <h2 className="text-base font-semibold text-zinc-100">キャラ設定に昇格</h2>
-            <p className="mt-2 rounded-md bg-zinc-800 px-2 py-1.5 text-sm text-zinc-300">
+            <h2 className="text-base font-semibold text-[var(--chat-heading-text,#f4f4f5)]">キャラ設定に昇格</h2>
+            <p className="mt-2 rounded-md bg-[var(--chat-input-bg,#27272a)] px-2 py-1.5 text-sm text-[var(--chat-button-text,#d4d4d8)]">
               {memory.content}
             </p>
             <div className="mt-4 space-y-3">
               <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-300">昇格先キャラクター</label>
+                <label className="mb-1 block text-sm font-medium text-[var(--chat-button-text,#d4d4d8)]">昇格先キャラクター</label>
                 <select
                   value={characterId}
                   onChange={(e) => setCharacterId(e.target.value)}
-                  className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                  className="w-full rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#27272a)] px-3 py-2 text-sm text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
                 >
                   {candidates.map((c) => (
                     <option key={c.character.id} value={c.character.id}>
@@ -507,11 +535,11 @@ function PromoteDialog({
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-300">昇格先の項目</label>
+                <label className="mb-1 block text-sm font-medium text-[var(--chat-button-text,#d4d4d8)]">昇格先の項目</label>
                 <select
                   value={target}
                   onChange={(e) => setTarget(e.target.value as PromotionTarget)}
-                  className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                  className="w-full rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#27272a)] px-3 py-2 text-sm text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
                 >
                   {(Object.keys(PROMOTION_TARGET_LABELS) as PromotionTarget[]).map((t) => (
                     <option key={t} value={t}>
@@ -525,7 +553,7 @@ function PromoteDialog({
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+                className="rounded-md border border-[var(--chat-button-border,#3f3f46)] px-3 py-1.5 text-sm text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
               >
                 キャンセル
               </button>
@@ -541,8 +569,8 @@ function PromoteDialog({
           </>
         ) : (
           <>
-            <h2 className="text-base font-semibold text-zinc-100">本当に昇格しますか?</h2>
-            <p className="mt-2 text-sm text-zinc-400">
+            <h2 className="text-base font-semibold text-[var(--chat-heading-text,#f4f4f5)]">本当に昇格しますか?</h2>
+            <p className="mt-2 text-sm text-[var(--chat-muted-text,#a1a1aa)]">
               「{memory.content}」を {selectedName} の「{PROMOTION_TARGET_LABELS[target]}」に追記します。
               昇格した内容はすべてのルーム(世界線)で反映されます。
             </p>
@@ -550,7 +578,7 @@ function PromoteDialog({
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+                className="rounded-md border border-[var(--chat-button-border,#3f3f46)] px-3 py-1.5 text-sm text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
               >
                 戻る
               </button>

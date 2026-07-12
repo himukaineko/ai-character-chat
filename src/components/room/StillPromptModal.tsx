@@ -61,14 +61,15 @@ export function StillPromptModal({ open, roomId, hasMessages, onClose }: StillPr
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={handleClose}>
+      {/* テーマ統一(機能修正): 黒固定をやめ、テーマのサーフェス色で表示する */}
       <div
-        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg border border-zinc-700 bg-zinc-900 p-5 shadow-xl"
+        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-lg border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#18181b)] p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-base font-semibold text-zinc-100">スチル用プロンプト生成</h2>
-            <p className="mt-1 text-xs text-zinc-500">
+            <h2 className="text-base font-semibold text-[var(--chat-heading-text,#f4f4f5)]">スチル用プロンプト生成</h2>
+            <p className="mt-1 text-xs text-[var(--chat-placeholder-text,#71717a)]">
               今の会話シーンを画像生成AI(ChatGPT等)でイラスト化するためのプロンプトを作成します。キャラクターのイラストは別途ご自身で添付してください。
             </p>
           </div>
@@ -76,14 +77,14 @@ export function StillPromptModal({ open, roomId, hasMessages, onClose }: StillPr
             type="button"
             onClick={handleClose}
             aria-label="閉じる"
-            className="shrink-0 rounded-md px-2 py-1 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"
+            className="shrink-0 rounded-md px-2 py-1 text-[var(--chat-muted-text,#a1a1aa)] hover:bg-[var(--chat-input-bg,#27272a)] hover:text-[var(--chat-heading-text,#e4e4e7)]"
           >
             ×
           </button>
         </div>
 
         {!hasMessages ? (
-          <p className="mt-4 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-500">
+          <p className="mt-4 rounded-md border border-[var(--chat-border,#27272a)] bg-[var(--chat-input-bg,#09090b)] px-3 py-2 text-sm text-[var(--chat-placeholder-text,#71717a)]">
             会話がまだありません。まず会話を進めてからお試しください。
           </p>
         ) : (
@@ -98,7 +99,8 @@ export function StillPromptModal({ open, roomId, hasMessages, onClose }: StillPr
             </button>
 
             {error && (
-              <div className="mt-3 rounded-md border border-red-800 bg-red-950/50 px-3 py-2 text-sm text-red-200">
+              // 半透明の赤はどのテーマの背景でも成立する。文字色だけテーマの危険色に連動させる
+              <div className="mt-3 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-[var(--chat-danger-text,#fecaca)]">
                 <p>{error.message}</p>
               </div>
             )}
@@ -110,18 +112,20 @@ export function StillPromptModal({ open, roomId, hasMessages, onClose }: StillPr
                   onChange={(e) => setPrompt(e.target.value)}
                   placeholder={generating ? "生成しています…" : ""}
                   rows={10}
-                  className="w-full flex-1 resize-none rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                  className="w-full flex-1 resize-none rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#09090b)] px-3 py-2 text-sm text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
                 />
                 <div className="mt-2 flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => void handleCopy()}
                     disabled={!prompt}
-                    className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+                    className="rounded-md border border-[var(--chat-button-border,#3f3f46)] px-3 py-1.5 text-sm text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)] disabled:opacity-50"
                   >
                     コピー
                   </button>
-                  {copied && <span className="text-xs text-indigo-300">コピーしました</span>}
+                  {copied && (
+                    <span className="text-xs text-[var(--chat-accent-text,#a5b4fc)]">コピーしました</span>
+                  )}
                 </div>
               </div>
             )}

@@ -1,8 +1,9 @@
 // ルーム上部バーの参加キャラアイコン列(仕様書10.2)
 // 参加=カラー、聞いている=半透明+耳アイコン、不参加=グレーアウト。
 // アイコンタップでポップオーバーを出し、参加状態の切替・ルーム内上書きの編集・そのキャラの記憶確認ができる。
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import type { Character, Presence, RoomCharacterState } from "../../types";
+import { calcDropdownStyle } from "../../lib/dropdownPosition";
 import { CharacterAvatar } from "../CharacterAvatar";
 
 export interface MemberBarItem {
@@ -32,6 +33,20 @@ export function MemberBar({
   onShowMemories,
 }: MemberBarProps) {
   const [openId, setOpenId] = useState<string | null>(null);
+  // はみ出し修正(モバイル対応): ポップオーバーはfixed配置+画面内クランプで表示する
+  // (画面右端近くのチップから開いても画面外に切れないようにする)。
+  const [popoverStyle, setPopoverStyle] = useState<CSSProperties>({});
+
+  const togglePopover = (characterId: string, trigger: HTMLElement) => {
+    if (openId !== characterId) {
+      setPopoverStyle(
+        calcDropdownStyle(trigger, { menuWidth: 192, direction: "down", align: "left" }),
+      );
+      setOpenId(characterId);
+    } else {
+      setOpenId(null);
+    }
+  };
 
   if (members.length === 0) {
     return <span className="text-xs text-[var(--chat-placeholder-text)]">メンバー未設定</span>;
@@ -45,7 +60,7 @@ export function MemberBar({
           <div key={character.id} className="relative shrink-0">
             <button
               type="button"
-              onClick={() => setOpenId(isOpen ? null : character.id)}
+              onClick={(e) => togglePopover(character.id, e.currentTarget)}
               // チップの地の色はテーマの入力欄相当(--chat-input-bg)を流用し、上部バーの
               // サーフェス背景から一段沈んだ面として見えるようにする。
               // 参加状態の視覚表現(不参加=グレーアウト+半透明、聞いている=半透明)は
@@ -75,8 +90,14 @@ export function MemberBar({
               <>
                 {/* 背景クリックで閉じる */}
                 <div className="fixed inset-0 z-40" onClick={() => setOpenId(null)} />
-                <div className="absolute left-0 top-full z-50 mt-1 w-48 rounded-lg border border-zinc-700 bg-zinc-900 p-2 shadow-xl">
-                  <p className="px-1 pb-1 text-xs font-medium text-zinc-400">{character.name}の参加状態</p>
+                {/* テーマ統一(機能修正): 黒固定をやめ、テーマのサーフェス色で表示する */}
+                <div
+                  className="fixed z-50 rounded-lg border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#18181b)] p-2 shadow-xl"
+                  style={popoverStyle}
+                >
+                  <p className="px-1 pb-1 text-xs font-medium text-[var(--chat-muted-text,#a1a1aa)]">
+                    {character.name}の参加状態
+                  </p>
                   <div className="flex flex-col">
                     {presenceOptions.map((opt) => (
                       <button
@@ -88,22 +109,22 @@ export function MemberBar({
                         }}
                         className={`rounded-md px-2 py-1.5 text-left text-sm ${
                           state.presence === opt.value
-                            ? "bg-indigo-500/20 text-indigo-200"
-                            : "text-zinc-300 hover:bg-zinc-800"
+                            ? "bg-indigo-500/20 text-[var(--chat-accent-text,#c7d2fe)]"
+                            : "text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
                         }`}
                       >
                         {opt.label}
                       </button>
                     ))}
                   </div>
-                  <div className="mt-1 flex flex-col border-t border-zinc-800 pt-1">
+                  <div className="mt-1 flex flex-col border-t border-[var(--chat-border,#27272a)] pt-1">
                     <button
                       type="button"
                       onClick={() => {
                         setOpenId(null);
                         onEditOverrides(character.id);
                       }}
-                      className="rounded-md px-2 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
+                      className="rounded-md px-2 py-1.5 text-left text-sm text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
                     >
                       ルーム内上書きを編集
                     </button>
@@ -113,7 +134,7 @@ export function MemberBar({
                         setOpenId(null);
                         onShowMemories(character.id);
                       }}
-                      className="rounded-md px-2 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
+                      className="rounded-md px-2 py-1.5 text-left text-sm text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
                     >
                       記憶を確認
                     </button>

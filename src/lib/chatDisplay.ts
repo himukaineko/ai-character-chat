@@ -49,6 +49,9 @@ export interface ChatThemeTokens {
   buttonBorder: string; // 枠線タイプの通常ボタンの枠色(surfaceBorderと同値で良ければ流用)
   accentText: string; // 「会話を続ける」等indigoアクセント文字色(明背景でも読める値に調整)
   dangerText: string; // 「削除」等赤文字色(明背景でも読める値に調整)
+  // ここから機能修正(フローティングUIのテーマ統一)で追加したトークン
+  successText: string; // 「保存しました」等の成功フィードバック文字色(明背景でも読める値に調整)
+  warningText: string; // 「固定」バッジ等の注意系文字色(明背景でも読める値に調整)
 }
 
 /**
@@ -81,6 +84,8 @@ export const CHAT_THEME_TOKENS: Record<ChatTheme, ChatThemeTokens> = {
     buttonBorder: "#3f3f46", // zinc-700(現状のborder-zinc-700)
     accentText: "#a5b4fc", // indigo-300(現状のtext-indigo-300)
     dangerText: "#f87171", // red-400(現状のtext-red-400)
+    successText: "#34d399", // emerald-400(現状のtext-emerald-400)
+    warningText: "#fcd34d", // amber-300(現状のtext-amber-300)
   },
   navy: {
     bg: "#0f172a",
@@ -104,6 +109,8 @@ export const CHAT_THEME_TOKENS: Record<ChatTheme, ChatThemeTokens> = {
     buttonBorder: "#334155", // slate-700
     accentText: "#a5b4fc", // indigo-300(濃紺背景でも十分なコントラスト)
     dangerText: "#f87171", // red-400
+    successText: "#34d399", // emerald-400
+    warningText: "#fcd34d", // amber-300
   },
   light: {
     bg: "#fafafa",
@@ -127,6 +134,8 @@ export const CHAT_THEME_TOKENS: Record<ChatTheme, ChatThemeTokens> = {
     buttonBorder: "#d4d4d8", // zinc-300
     accentText: "#4338ca", // indigo-700(白背景でコントラストを保てる濃さまで落とす)
     dangerText: "#b91c1c", // red-700(白背景でコントラストを保てる濃さまで落とす)
+    successText: "#047857", // emerald-700(白背景でコントラストを保てる濃さまで落とす)
+    warningText: "#b45309", // amber-700(白背景でコントラストを保てる濃さまで落とす)
   },
   natural: {
     bg: "#f2ece1",
@@ -150,6 +159,8 @@ export const CHAT_THEME_TOKENS: Record<ChatTheme, ChatThemeTokens> = {
     buttonBorder: "#ddd2c0",
     accentText: "#4f46e5", // indigo-600(クリーム背景でも十分なコントラスト)
     dangerText: "#b91c1c", // red-700(クリーム背景でコントラストを保てる濃さ)
+    successText: "#047857", // emerald-700(クリーム背景でコントラストを保てる濃さ)
+    warningText: "#b45309", // amber-700(クリーム背景でコントラストを保てる濃さ)
   },
 };
 
@@ -200,6 +211,8 @@ export const CHAT_THEME_CSS_VAR_NAMES = {
   buttonBorder: "--chat-button-border",
   accentText: "--chat-accent-text",
   dangerText: "--chat-danger-text",
+  successText: "--chat-success-text",
+  warningText: "--chat-warning-text",
 } as const satisfies Record<keyof ChatThemeTokens, string>;
 
 /** 指定テーマをCSSカスタムプロパティのオブジェクトに変換する(RoomPage/SettingsPageのルートにstyleとして適用する) */

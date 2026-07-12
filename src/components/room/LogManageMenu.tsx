@@ -1,7 +1,8 @@
 // 会話ログの段階式削除(仕様書7.4)
 // ログのみ削除 / ログ+要約を削除 / ルーム完全リセット。いずれも確認ダイアログ必須。
-import { useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { ConfirmDialog } from "../ConfirmDialog";
+import { calcDropdownStyle } from "../../lib/dropdownPosition";
 import { ListIcon } from "./RoomBarIcons";
 
 type DeleteStage = "logOnly" | "logAndSummary" | "resetAll" | null;
@@ -21,6 +22,18 @@ export function LogManageMenu({
   const [confirmStage, setConfirmStage] = useState<DeleteStage>(null);
   const [running, setRunning] = useState(false);
 
+  // はみ出し修正(モバイル対応): メニューはトリガー基準のabsoluteではなくfixedで配置し、
+  // 開く瞬間にトリガー位置から画面内に収まる座標を計算する(375px幅で左端が見切れる問題の対策)。
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const [menuStyle, setMenuStyle] = useState<CSSProperties>({});
+
+  const toggleMenu = () => {
+    if (!menuOpen && buttonRef.current) {
+      setMenuStyle(calcDropdownStyle(buttonRef.current, { menuWidth: 224, direction: "down" }));
+    }
+    setMenuOpen((v) => !v);
+  };
+
   const run = async (fn: () => Promise<void>) => {
     setRunning(true);
     try {
@@ -34,8 +47,9 @@ export function LogManageMenu({
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setMenuOpen((v) => !v)}
+        onClick={toggleMenu}
         title="ログ管理"
         aria-label="ログ管理"
         className="flex h-10 w-10 items-center justify-center rounded-md border border-[var(--chat-button-border)] text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)] sm:h-auto sm:w-auto sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-xs"
@@ -46,14 +60,18 @@ export function LogManageMenu({
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-lg border border-zinc-700 bg-zinc-900 p-1 shadow-xl">
+          {/* テーマ統一(機能修正): 黒固定をやめ、テーマのサーフェス色で表示する */}
+          <div
+            className="fixed z-50 rounded-lg border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#18181b)] p-1 shadow-xl"
+            style={menuStyle}
+          >
             <button
               type="button"
               onClick={() => {
                 setMenuOpen(false);
                 setConfirmStage("logOnly");
               }}
-              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
+              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
             >
               ログのみ削除
             </button>
@@ -63,7 +81,7 @@ export function LogManageMenu({
                 setMenuOpen(false);
                 setConfirmStage("logAndSummary");
               }}
-              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-zinc-300 hover:bg-zinc-800"
+              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
             >
               ログ+要約を削除
             </button>
@@ -73,7 +91,7 @@ export function LogManageMenu({
                 setMenuOpen(false);
                 setConfirmStage("resetAll");
               }}
-              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-red-400 hover:bg-red-500/10"
+              className="block w-full rounded-md px-2 py-1.5 text-left text-sm text-[var(--chat-danger-text,#f87171)] hover:bg-red-500/10"
             >
               ルーム完全リセット
             </button>

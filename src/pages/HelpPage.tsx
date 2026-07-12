@@ -2,6 +2,15 @@
 // 上部は常時表示のクイックスタート(3ステップ)、下部は機能別の折りたたみ(アコーディオン)。
 // 「文字がずらずら並んで読みづらい」というフィードバックを受け、各項目は箇条書きで要点のみ短く示す。
 import type { ReactNode } from "react";
+// ルーム画面の上部バーアイコンの凡例(機能追加): 実物と同じSVGを表示して迷いをなくす
+import {
+  ImageIcon,
+  ListIcon,
+  PanelIcon,
+  SettingsIcon,
+  ThemeIcon,
+  TrashIcon,
+} from "../components/room/RoomBarIcons";
 
 // ボタン名・画面名を目立たせるためのバッジ風インライン表示
 function Tag({ children }: { children: ReactNode }) {
@@ -69,6 +78,30 @@ function QuickStartStep({
       <div className="pt-0.5">
         <p className="text-sm font-semibold text-zinc-100">{title}</p>
         <p className="mt-0.5 text-sm leading-relaxed text-zinc-400">{children}</p>
+      </div>
+    </li>
+  );
+}
+
+// ルーム画面のボタン凡例の1行(実物のアイコン+名前+一言説明)
+function IconLegendRow({
+  icon,
+  name,
+  children,
+}: {
+  icon: ReactNode;
+  name: string;
+  children: ReactNode;
+}) {
+  return (
+    <li className="flex items-start gap-3">
+      {/* ルーム画面の実際のボタンと同じ「枠付きの角丸」で表示し、画面上での見た目と対応づける */}
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-700 text-zinc-300">
+        {icon}
+      </span>
+      <div className="min-w-0 pt-0.5">
+        <p className="text-sm font-semibold text-zinc-100">{name}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-zinc-400">{children}</p>
       </div>
     </li>
   );
@@ -171,6 +204,36 @@ export function HelpPage() {
               ルーム設定の<Tag>返事の長さ</Tag>で、短め〜長めにボリュームを調整できます。
             </Bullet>
           </BulletList>
+        </AccordionSection>
+
+        {/* ルーム画面の上部バーはスマホではアイコンのみ表示のため、実物アイコン付きの凡例を用意する(機能追加) */}
+        <AccordionSection title="ルーム画面のボタン">
+          <p className="text-xs leading-relaxed text-zinc-500">
+            ルーム画面の上部バーのボタンは、スマホではアイコンだけで表示されます。それぞれの意味は次のとおりです。
+          </p>
+          <ul className="mt-3 space-y-3">
+            <IconLegendRow icon={<ThemeIcon className="h-5 w-5" />} name="テーマ切替">
+              押すたびにチャットの配色テーマが切り替わります(黒系→濃紺系→白系→ナチュラル系の順)。
+            </IconLegendRow>
+            <IconLegendRow icon={<PanelIcon className="h-5 w-5" />} name="パネル">
+              メンバーの参加状態の一括管理と、会話から蓄積された記憶の一覧・編集を開きます。
+            </IconLegendRow>
+            <IconLegendRow icon={<ImageIcon className="h-5 w-5" />} name="スチル">
+              今の会話シーンをイラスト化するための、画像生成AI用プロンプトを作成します。
+            </IconLegendRow>
+            <IconLegendRow icon={<ListIcon className="h-5 w-5" />} name="ログ管理">
+              会話ログの削除を段階別(ログのみ/ログ+要約/ルーム完全リセット)に実行できます。
+            </IconLegendRow>
+            <IconLegendRow icon={<SettingsIcon className="h-5 w-5" />} name="ルーム設定">
+              ルーム名・参加メンバー・世界観メモ・ナレーションレベルなどを変更します。
+            </IconLegendRow>
+            <IconLegendRow icon={<TrashIcon className="h-5 w-5" />} name="削除">
+              ルームそのものを削除します(会話ログや記憶ごと消えます。取り消せません)。
+            </IconLegendRow>
+            <IconLegendRow icon={<span className="text-base leading-none">⋯</span>} name="その他の操作(入力欄の横)">
+              スマホでは入力欄の上の<Tag>⋯</Tag>に、元に戻す・再生成・自動生成がまとまっています。
+            </IconLegendRow>
+          </ul>
         </AccordionSection>
 
         <AccordionSection title="行動描写(【 】記法)">
