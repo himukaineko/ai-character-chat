@@ -4,7 +4,7 @@
 import { useRef, useState, type ChangeEvent, type CSSProperties } from "react";
 import { useAppStore } from "../store";
 import type { AppSettings, UserProfile } from "../types";
-import { resolveChatBackground, resolveChatFontSize } from "../types";
+import { resolveChatFontSize, resolveChatTheme } from "../types";
 import {
   CUSTOM_MODEL_TAB_DESCRIPTION,
   loadAppSettings,
@@ -16,9 +16,11 @@ import {
   type MainModelTabKey,
 } from "../lib/settings";
 import {
-  CHAT_BACKGROUND_PRESETS,
   CHAT_FONT_SIZE_OPTIONS,
   CHAT_FONT_SIZE_VALUES,
+  CHAT_THEME_OPTIONS,
+  CHAT_THEME_TOKENS,
+  chatThemeToCssVars,
 } from "../lib/chatDisplay";
 import { TagInput } from "../components/TagInput";
 import { ConfirmDialog } from "../components/ConfirmDialog";
@@ -282,7 +284,7 @@ export function SettingsPage() {
       <section className="mt-6 rounded-lg border border-zinc-800 bg-zinc-900 p-4">
         <h2 className="text-base font-semibold text-zinc-100">表示設定</h2>
         <p className="mt-1 text-xs text-zinc-500">
-          チャット画面の文字の大きさと背景色を好みに合わせて変更できます。目の負担が気になるときに調整してください。
+          チャット画面の文字の大きさと配色テーマを好みに合わせて変更できます。目の負担が気になるときに調整してください。
         </p>
         <div className="mt-4 space-y-4">
           <div>
@@ -305,31 +307,43 @@ export function SettingsPage() {
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-300">背景色</label>
-            <div className="flex flex-wrap items-center gap-2">
-              {CHAT_BACKGROUND_PRESETS.map((preset) => (
-                <button
-                  key={preset.value}
-                  type="button"
-                  onClick={() => setSettings((s) => ({ ...s, chatBackground: preset.value }))}
-                  title={preset.label}
-                  aria-label={preset.label}
-                  className={`h-8 w-8 shrink-0 rounded-full border-2 ${
-                    resolveChatBackground(settings.chatBackground) === preset.value
-                      ? "border-indigo-400"
-                      : "border-zinc-700"
-                  }`}
-                  style={{ backgroundColor: preset.value }}
-                />
-              ))}
-              <input
-                type="color"
-                value={resolveChatBackground(settings.chatBackground)}
-                onChange={(e) => setSettings((s) => ({ ...s, chatBackground: e.target.value }))}
-                title="背景色を自由に指定"
-                aria-label="背景色を自由に指定"
-                className="h-8 w-10 shrink-0 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
-              />
+            <label className="mb-1 block text-sm font-medium text-zinc-300">配色テーマ</label>
+            <p className="mb-2 text-xs text-zinc-500">
+              背景・吹き出し・文字色をまとめて切り替えます。自由な色指定はできませんが、どのテーマでも読みやすいように調整済みです。
+            </p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {CHAT_THEME_OPTIONS.map((opt) => {
+                const tokens = CHAT_THEME_TOKENS[opt.value];
+                const selected =
+                  resolveChatTheme(settings.chatTheme, settings.chatBackground) === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setSettings((s) => ({ ...s, chatTheme: opt.value }))}
+                    aria-pressed={selected}
+                    className={`flex flex-col items-center gap-1.5 rounded-lg border-2 p-2 transition-colors ${
+                      selected ? "border-indigo-400" : "border-zinc-700 hover:border-zinc-600"
+                    }`}
+                  >
+                    {/* ミニプレビュー: 背景色+キャラ吹き出し+ユーザー吹き出し */}
+                    <div
+                      className="flex w-full flex-col gap-1 rounded-md p-2"
+                      style={{ backgroundColor: tokens.bg }}
+                    >
+                      <span
+                        className="h-3 w-3/4 self-start rounded-full"
+                        style={{ backgroundColor: tokens.charBubbleBg }}
+                      />
+                      <span
+                        className="h-3 w-3/5 self-end rounded-full"
+                        style={{ backgroundColor: tokens.userBubbleBg }}
+                      />
+                    </div>
+                    <span className="text-xs text-zinc-300">{opt.label}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -337,24 +351,32 @@ export function SettingsPage() {
           <div>
             <label className="mb-1 block text-sm font-medium text-zinc-300">プレビュー</label>
             <div
-              className="space-y-1 rounded-md border border-zinc-800 p-3"
+              className="space-y-1 rounded-md border border-zinc-800 bg-[var(--chat-bg)] p-3"
               style={
                 {
-                  backgroundColor: resolveChatBackground(settings.chatBackground),
+                  ...chatThemeToCssVars(resolveChatTheme(settings.chatTheme, settings.chatBackground)),
                   "--chat-font-size":
                     CHAT_FONT_SIZE_VALUES[resolveChatFontSize(settings.chatFontSize)],
                 } as CSSProperties
               }
             >
               <div className="flex items-start gap-2">
-                <div className="rounded-2xl rounded-tl-sm bg-zinc-800 px-3 py-2 text-[length:var(--chat-font-size)] text-zinc-100">
+                <div className="rounded-2xl rounded-tl-sm bg-[var(--chat-char-bubble-bg)] px-3 py-2 text-[length:var(--chat-font-size)] text-[var(--chat-char-bubble-text)]">
                   うん、大丈夫だよ
                 </div>
               </div>
-              <span className="block font-mincho text-[length:var(--chat-font-size)] text-zinc-400">
+              <span className="block font-mincho text-[length:var(--chat-font-size)] text-[var(--chat-char-action-text)]">
                 少し困ったように笑う
               </span>
-              <p className="text-center text-[length:var(--chat-font-size)] italic leading-relaxed text-zinc-500">
+              <div className="flex justify-end">
+                <div className="rounded-2xl rounded-tr-sm bg-[var(--chat-user-bubble-bg)] px-3 py-2 text-[length:var(--chat-font-size)] text-[var(--chat-user-bubble-text)]">
+                  ありがとう、助かる
+                </div>
+              </div>
+              <span className="block text-right font-mincho text-[length:var(--chat-font-size)] text-[var(--chat-user-action-text)]">
+                笑いかける
+              </span>
+              <p className="text-center text-[length:var(--chat-font-size)] italic leading-relaxed text-[var(--chat-narration-text)]">
                 静かな夜だった。
               </p>
             </div>

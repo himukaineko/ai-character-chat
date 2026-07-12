@@ -20,7 +20,7 @@ import {
   type MemberDetailTab,
 } from "../components/room/MemberDetailModal";
 import type { Memory, Message, Presence, RoomCharacterOverrides } from "../types";
-import { resolveChatBackground, resolveChatFontSize } from "../types";
+import { resolveChatFontSize, resolveChatTheme } from "../types";
 import {
   deleteLogAndSummary,
   deleteLogOnly,
@@ -31,7 +31,7 @@ import {
 } from "../lib/messages";
 import { listMemories, updateMemory } from "../lib/memories";
 import { loadAppSettings, saveLastRoomId } from "../lib/settings";
-import { CHAT_FONT_SIZE_VALUES } from "../lib/chatDisplay";
+import { CHAT_FONT_SIZE_VALUES, chatThemeToCssVars } from "../lib/chatDisplay";
 import {
   generateNextBatch,
   regenerateLastBatch,
@@ -88,10 +88,10 @@ export function RoomPage() {
 
   const logEndRef = useRef<HTMLDivElement>(null);
 
-  // チャット表示カスタム(文字サイズ・背景色): 設定画面で保存された値をこのルーム画面に適用する
+  // チャット表示カスタム(文字サイズ・配色テーマ): 設定画面で保存された値をこのルーム画面に適用する
   const [appSettings] = useState(() => loadAppSettings());
   const chatFontSize = resolveChatFontSize(appSettings.chatFontSize);
-  const chatBackground = resolveChatBackground(appSettings.chatBackground);
+  const chatTheme = resolveChatTheme(appSettings.chatTheme, appSettings.chatBackground);
 
   const room = rooms.find((r) => r.id === id);
 
@@ -299,10 +299,10 @@ export function RoomPage() {
 
   return (
     <div
-      className="mx-auto flex h-screen max-w-3xl flex-col px-4 py-4"
+      className="mx-auto flex h-screen max-w-3xl flex-col bg-[var(--chat-bg)] px-4 py-4"
       style={
         {
-          backgroundColor: chatBackground,
+          ...chatThemeToCssVars(chatTheme),
           "--chat-font-size": CHAT_FONT_SIZE_VALUES[chatFontSize],
         } as CSSProperties
       }

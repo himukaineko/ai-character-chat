@@ -2,6 +2,12 @@
 // セグメントコントロールで「トピック」/「発言」を切替。
 // 「次の会話を生成」ボタン(観察用)・再生成ボタン(オプション付き)・元に戻すボタンを併設する。
 // 自動連続生成(仕様書5.1): 回数上限付きで「次の会話を生成」を連続実行できる。無限生成は禁止。
+//
+// モバイル入力欄のコンパクト化(機能追加): sm未満の画面ではボタンが並びすぎて
+// 入力欄が狭くなるため、常時表示は最低限(トピック/発言切替・会話を続ける・入力欄・⋯)に絞り、
+// 元に戻す/再生成/自動生成は「⋯」を押したときだけ展開するオプション行に収める。
+// 自動連続生成中の停止ボタンだけは、止められなくなることを防ぐため「⋯」の外(常時表示位置)に置く。
+// デスクトップ(sm以上)は既存の全ボタン常時表示のまま変更しない。
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { RegenerateOption } from "../../llm/promptBuilder";
 import { AUTO_GENERATE_COUNT_OPTIONS, AUTO_GENERATE_DEFAULT_COUNT } from "../../lib/autoGenerate";
@@ -42,6 +48,8 @@ export function ChatInput({
   const [autoCount, setAutoCount] = useState<number>(AUTO_GENERATE_DEFAULT_COUNT);
   const busy = generating || autoGenerating;
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  // モバイル用「⋯」オプション行の開閉(元に戻す/再生成/自動生成をここにまとめる)
+  const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
 
   // 入力内容に応じて1行分の高さから数行まで自動で伸びるようにする(上限はCSSのmax-hで制御)
   useEffect(() => {
@@ -88,7 +96,8 @@ export function ChatInput({
           </button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        {/* デスクトップ(sm以上): 従来どおり全ボタンを常時表示する */}
+        <div className="hidden flex-wrap items-center gap-2 sm:flex">
           <button
             type="button"
             disabled={busy || !canUndo}
@@ -144,7 +153,89 @@ export function ChatInput({
             )}
           </div>
         </div>
+
+        {/*
+          モバイル(sm未満): 常時表示は最低限だけにする。
+          「会話を続ける」は常時表示、自動生成中は停止ボタンも⋯の外(常時表示位置)に出す
+          (自動生成中に止められなくなることを防ぐため)。それ以外(元に戻す/再生成/自動生成の開始)は
+          「⋯」を押したときだけ下に展開する。
+        */}
+        <div className="flex items-center gap-2 sm:hidden">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onGenerateNext}
+            title="トピックや発言を追加せず、今の流れのままキャラたちに会話を続けさせる"
+            className="rounded-md border border-indigo-600 px-3 py-2 text-sm text-indigo-300 hover:bg-indigo-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            会話を続ける
+          </button>
+          {autoGenerating && (
+            <button
+              type="button"
+              onClick={onStopAutoGenerate}
+              className="rounded-md border border-red-700 px-3 py-2 text-sm text-red-300 hover:bg-red-500/10"
+            >
+              停止
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setMobileOptionsOpen((v) => !v)}
+            aria-expanded={mobileOptionsOpen}
+            aria-label="その他の操作(元に戻す・再生成・自動生成)"
+            title="その他の操作(元に戻す・再生成・自動生成)"
+            className={`rounded-md border px-3 py-2 text-sm ${
+              mobileOptionsOpen
+                ? "border-indigo-400 text-indigo-300"
+                : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            }`}
+          >
+            ⋯
+          </button>
+        </div>
       </div>
+
+      {/* モバイル用オプション行(「⋯」で開閉): 元に戻す・再生成・自動生成の開始をここにまとめる */}
+      {mobileOptionsOpen && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-zinc-700 bg-zinc-900/60 p-2 sm:hidden">
+          <button
+            type="button"
+            disabled={busy || !canUndo}
+            onClick={onUndo}
+            title="直前の生成を取り消す"
+            className="rounded-md border border-zinc-700 px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            元に戻す
+          </button>
+          <RegenerateMenu disabled={busy || !canRegenerate} onRegenerate={onRegenerate} />
+          {!autoGenerating && (
+            <div className="flex items-center gap-1 rounded-md border border-zinc-700 pl-1">
+              <select
+                value={autoCount}
+                onChange={(e) => setAutoCount(Number(e.target.value))}
+                disabled={busy}
+                title="自動連続生成の回数(上限あり)"
+                className="rounded-md bg-transparent px-1 py-2 text-xs text-zinc-300 outline-none disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {AUTO_GENERATE_COUNT_OPTIONS.map((n) => (
+                  <option key={n} value={n} className="bg-zinc-900">
+                    {n}回連続
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={generating}
+                onClick={() => onAutoGenerate(autoCount)}
+                className="rounded-md px-3 py-2 text-sm text-zinc-300 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                自動生成
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="flex items-end gap-2">
         <textarea
@@ -174,9 +265,12 @@ export function ChatInput({
         </button>
       </form>
       {mode === "message" ? (
-        <p className="mt-1 text-xs text-zinc-600">
-          【 】で囲むと行動描写になります(セリフの途中でもOK)/ Shift+Enterで改行
-        </p>
+        <>
+          <p className="mt-1 hidden text-xs text-zinc-600 sm:block">
+            【 】で囲むと行動描写になります(セリフの途中でもOK)/ Shift+Enterで改行
+          </p>
+          <p className="mt-1 text-xs text-zinc-600 sm:hidden">【 】で行動描写</p>
+        </>
       ) : (
         <p className="mt-1 text-xs text-zinc-600">
           投入すると、その話題でキャラたちが話し始めます

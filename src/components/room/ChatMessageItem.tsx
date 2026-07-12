@@ -69,7 +69,7 @@ export function ChatMessageItem({ message, character, onRewind, onDelete }: Chat
         onClick={() => setMenuOpen((v) => !v)}
         // モバイルでのタップ領域確保(仕様外の見た目肥大を避けるため、視覚上のサイズは
         // 変えずflexで中央寄せし、実際のヒット領域を44px近くまで広げる)
-        className="flex h-11 w-11 items-center justify-center rounded-full text-xs text-zinc-600 opacity-60 hover:bg-zinc-800 hover:text-zinc-300 hover:opacity-100"
+        className="flex h-11 w-11 items-center justify-center rounded-full text-xs text-[var(--chat-muted-text)] opacity-60 hover:bg-zinc-800/40 hover:text-zinc-100 hover:opacity-100"
         aria-label="メッセージ操作"
       >
         ⋯
@@ -114,9 +114,9 @@ export function ChatMessageItem({ message, character, onRewind, onDelete }: Chat
   if (message.type === "topic") {
     return (
       <div className="animate-message-in group my-3 flex items-center justify-center gap-2">
-        <div className="h-px flex-1 bg-zinc-800" />
-        <span className="shrink-0 text-xs text-zinc-500">場面: {message.text}</span>
-        <div className="h-px flex-1 bg-zinc-800" />
+        <div className="h-px flex-1 bg-[var(--chat-topic-line)]" />
+        <span className="shrink-0 text-xs text-[var(--chat-topic-text)]">場面: {message.text}</span>
+        <div className="h-px flex-1 bg-[var(--chat-topic-line)]" />
         {ActionMenuButton}
       </div>
     );
@@ -125,7 +125,7 @@ export function ChatMessageItem({ message, character, onRewind, onDelete }: Chat
   if (message.type === "narration") {
     return (
       <div className="animate-message-in group my-2 flex items-start justify-center gap-1 px-6 text-center">
-        <p className="max-w-lg whitespace-pre-wrap text-[length:var(--chat-font-size,0.875rem)] italic leading-relaxed text-zinc-500">
+        <p className="max-w-lg whitespace-pre-wrap text-[length:var(--chat-font-size,0.875rem)] italic leading-relaxed text-[var(--chat-narration-text)]">
           {message.text}
         </p>
         {ActionMenuButton}
@@ -140,8 +140,8 @@ export function ChatMessageItem({ message, character, onRewind, onDelete }: Chat
         {ActionMenuButton}
         <div className="flex max-w-[75%] flex-col items-end">
           {segments.length > 0 && (
-            <div className="rounded-2xl rounded-tr-sm bg-indigo-600 px-3 py-2 text-[length:var(--chat-font-size,0.875rem)] text-white">
-              <SegmentBlocks segments={segments} actionClassName="text-indigo-200" />
+            <div className="rounded-2xl rounded-tr-sm bg-[var(--chat-user-bubble-bg)] px-3 py-2 text-[length:var(--chat-font-size,0.875rem)] text-[var(--chat-user-bubble-text)]">
+              <SegmentBlocks segments={segments} actionClassName="text-[var(--chat-user-action-text)]" />
             </div>
           )}
         </div>
@@ -166,10 +166,13 @@ export function ChatMessageItem({ message, character, onRewind, onDelete }: Chat
         <CharacterAvatar character={character} size={32} />
       )}
       <div className="flex min-w-0 max-w-[75%] flex-col items-start">
-        <span className="mb-0.5 text-xs text-zinc-400">{message.speaker}</span>
+        <span className="mb-0.5 text-xs text-[var(--chat-muted-text)]">{message.speaker}</span>
         {dialogueSegments.length > 0 && (
-          <div className="rounded-2xl rounded-tl-sm bg-zinc-800 px-3 py-2 text-[length:var(--chat-font-size,0.875rem)] text-zinc-100">
-            <SegmentBlocks segments={dialogueSegments} actionClassName="text-zinc-400" />
+          <div className="rounded-2xl rounded-tl-sm bg-[var(--chat-char-bubble-bg)] px-3 py-2 text-[length:var(--chat-font-size,0.875rem)] text-[var(--chat-char-bubble-text)]">
+            <SegmentBlocks
+              segments={dialogueSegments}
+              actionClassName="text-[var(--chat-char-action-text)]"
+            />
           </div>
         )}
       </div>

@@ -218,6 +218,13 @@ export type ChatFontSize = "small" | "normal" | "large";
 /** chatBackground未設定時のデフォルト背景色(現状の背景色 zinc-950 相当) */
 export const DEFAULT_CHAT_BACKGROUND = "#09090b";
 
+/**
+ * チャット配色テーマ(機能追加: 配色テーマ方式)。
+ * 背景色だけでなく吹き出し・文字色・行動描写・narrationの色をひとまとめに切り替える。
+ * 実際の色定義は lib/chatDisplay.ts の CHAT_THEME_TOKENS を参照すること。
+ */
+export type ChatTheme = "dark" | "navy" | "light" | "natural";
+
 /** アプリ設定 */
 export interface AppSettings {
   apiKey: string; // localStorageに保存(IndexedDBではなく)
@@ -228,11 +235,22 @@ export interface AppSettings {
   /**
    * チャット表示カスタム(機能追加)。
    * 追加前に保存された既存設定はこれらのフィールドを持たない(localStorageのマイグレーションは行わない)ため、
-   * 読み込み側は必ず undefined → デフォルト値として扱うこと。直接 settings.chatFontSize / chatBackground を
-   * 参照せず resolveChatFontSize() / resolveChatBackground() を経由すること。
+   * 読み込み側は必ず undefined → デフォルト値として扱うこと。直接 settings.chatFontSize / chatBackground / chatTheme を
+   * 参照せず resolveChatFontSize() / resolveChatTheme() を経由すること。
    */
   chatFontSize?: ChatFontSize; // デフォルト "normal"
-  chatBackground?: string; // CSS色文字列。デフォルトは現状の背景色(DEFAULT_CHAT_BACKGROUND)
+  /**
+   * 旧仕様の自由指定背景色(機能変更: 配色テーマ方式に置き換え済み)。
+   * 新規保存はもう行わないが、既存ユーザーの保存値からテーマへ移行するために型としては残す。
+   * 表示には直接使わず、resolveChatTheme() の移行ロジックの入力としてのみ参照すること。
+   */
+  chatBackground?: string;
+  /**
+   * チャット配色テーマ(機能追加)。
+   * 追加前に保存された既存設定はこのフィールドを持たない。読み込み側は必ず
+   * resolveChatTheme() を経由すること(旧chatBackgroundからの移行を含む)。
+   */
+  chatTheme?: ChatTheme; // デフォルト "dark"
 }
 
 /** chatFontSize未設定の場合は "normal" 扱いにする防御的デフォルト */
@@ -240,7 +258,23 @@ export function resolveChatFontSize(chatFontSize: ChatFontSize | undefined): Cha
   return chatFontSize ?? "normal";
 }
 
-/** chatBackground未設定(または空文字)の場合は現状の背景色扱いにする防御的デフォルト */
+/** chatBackground未設定(または空文字)の場合は現状の背景色扱いにする防御的デフォルト(旧仕様。移行判定にのみ使用) */
 export function resolveChatBackground(chatBackground: string | undefined): string {
   return chatBackground && chatBackground.trim() !== "" ? chatBackground : DEFAULT_CHAT_BACKGROUND;
+}
+
+/**
+ * chatTheme未設定の場合の防御的デフォルト。
+ * chatThemeが保存されていればそれを優先し、無ければ旧chatBackgroundの値から近いテーマへ移行する
+ * (#0f172a→navy、それ以外の指定値→dark)。どちらも未設定なら"dark"(現状の見た目)を返す。
+ */
+export function resolveChatTheme(
+  chatTheme: ChatTheme | undefined,
+  chatBackground: string | undefined,
+): ChatTheme {
+  if (chatTheme) return chatTheme;
+  if (chatBackground && chatBackground.trim() !== "") {
+    return chatBackground === "#0f172a" ? "navy" : "dark";
+  }
+  return "dark";
 }
