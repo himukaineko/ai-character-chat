@@ -308,8 +308,8 @@ export function RoomPage() {
       }
     >
       {/* 上部バー */}
-      <div className="flex items-start justify-between gap-3 border-b border-zinc-800 pb-3">
-        <div className="min-w-0">
+      <div className="flex flex-col gap-2 border-b border-zinc-800 pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+        <div className="min-w-0 sm:flex-1">
           <h1 className="truncate text-lg font-bold text-zinc-100">{room.name}</h1>
           <div className="mt-2">
             <MemberBar
@@ -324,7 +324,7 @@ export function RoomPage() {
             />
           </div>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:flex-nowrap sm:justify-end">
           <button
             type="button"
             onClick={() => setSidePanelOpen(true)}

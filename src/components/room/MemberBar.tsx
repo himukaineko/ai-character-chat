@@ -42,11 +42,11 @@ export function MemberBar({
       {members.map(({ character, state }) => {
         const isOpen = openId === character.id;
         return (
-          <div key={character.id} className="relative">
+          <div key={character.id} className="relative shrink-0">
             <button
               type="button"
               onClick={() => setOpenId(isOpen ? null : character.id)}
-              className={`flex items-center gap-1.5 rounded-full bg-zinc-900 py-1 pl-1 pr-2 transition ${
+              className={`flex shrink-0 items-center gap-1.5 rounded-full bg-zinc-900 py-1 pl-1 pr-2 transition ${
                 state.presence === "absent" ? "opacity-40 grayscale" : ""
               } ${state.presence === "listening" ? "opacity-70" : ""}`}
               title={`${character.name}(${presenceOptions.find((p) => p.value === state.presence)?.label ?? ""})`}
@@ -57,7 +57,9 @@ export function MemberBar({
                   <span className="absolute -bottom-1 -right-1 text-[10px] leading-none">👂</span>
                 )}
               </span>
-              <span className="text-xs text-zinc-300">{character.name}</span>
+              <span className="max-w-[6rem] truncate whitespace-nowrap text-xs text-zinc-300">
+                {character.name}
+              </span>
             </button>
 
             {isOpen && (
