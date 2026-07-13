@@ -9,14 +9,21 @@ import { RoomPage } from "./pages/RoomPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { HelpPage } from "./pages/HelpPage";
 import { useAppStore } from "./store";
+import { ensureOnboardingSeeded } from "./lib/onboardingSeed";
 
 function App() {
   const loadAll = useAppStore((s) => s.loadAll);
   const loaded = useAppStore((s) => s.loaded);
 
-  // 起動時にIndexedDBから全データを読み込む
+  // 起動時にIndexedDBから全データを読み込む。
+  // 初回起動時オンボーディング(機能追加): まだシード投入していなければ、
+  // 読み込みの前に「導きのテラス」ルーム一式を投入する
+  // (判定・二重実行防止のロジックは lib/onboardingSeed.ts 側に集約している)。
   useEffect(() => {
-    loadAll();
+    (async () => {
+      await ensureOnboardingSeeded();
+      await loadAll();
+    })();
   }, [loadAll]);
 
   if (!loaded) {
