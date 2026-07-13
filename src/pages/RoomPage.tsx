@@ -397,22 +397,14 @@ export function RoomPage() {
     >
       {/* 上部バー: 没入モード中は非表示にしてチャット領域を広げる */}
       {!immersiveMode && (
-      <div className="relative flex flex-col gap-2 border-b border-[var(--chat-border)] bg-[var(--chat-surface)] pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
-        <div className="min-w-0 sm:flex-1">
-          <h1 className="truncate text-lg font-bold text-[var(--chat-heading-text)]">{room.name}</h1>
-          <div className="mt-2">
-            <MemberBar
-              members={members}
-              onChangePresence={handleChangePresence}
-              onEditOverrides={(characterId) =>
-                setMemberDetail({ characterId, tab: "overrides" })
-              }
-              onShowMemories={(characterId) =>
-                setMemberDetail({ characterId, tab: "memory" })
-              }
-            />
-          </div>
-        </div>
+      <div className="relative border-b border-[var(--chat-border)] bg-[var(--chat-surface)] pb-3">
+        {/* 1行目: ルーム名+ボタン列。メンバーチップは2行目に全幅で置く。
+            以前は「左=名前+メンバー / 右=ボタン列(縮まない)」の横並びだったため、
+            中間幅のウィンドウではボタン列に幅を奪われてチップが1〜2個ごとに縦積みになっていた。 */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <h1 className="min-w-0 truncate text-lg font-bold text-[var(--chat-heading-text)] sm:flex-1">
+          {room.name}
+        </h1>
         <div className="flex flex-nowrap items-center gap-1 sm:shrink-0 sm:gap-2 sm:justify-end">
           <button
             type="button"
@@ -486,6 +478,22 @@ export function RoomPage() {
             <TrashIcon className="h-5 w-5 shrink-0" />
             <span className="hidden sm:inline">削除</span>
           </button>
+        </div>
+        </div>
+
+        {/* 2行目: メンバーチップ。ボタン列と幅を取り合わず全幅を使えるため、
+            人数が多くても横に並びやすい(足りない場合のみ折り返す) */}
+        <div className="mt-2">
+          <MemberBar
+            members={members}
+            onChangePresence={handleChangePresence}
+            onEditOverrides={(characterId) =>
+              setMemberDetail({ characterId, tab: "overrides" })
+            }
+            onShowMemories={(characterId) =>
+              setMemberDetail({ characterId, tab: "memory" })
+            }
+          />
         </div>
 
         {/* テーマ切替トースト(機能追加): 切り替えた瞬間だけ現在のテーマ名を短時間表示する */}
