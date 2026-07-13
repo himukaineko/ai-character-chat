@@ -13,7 +13,15 @@ import { ChatInput } from "../components/room/ChatInput";
 import { AUTO_GENERATE_MAX_COUNT } from "../lib/autoGenerate";
 import { SidePanel } from "../components/room/SidePanel";
 import { LogManageMenu } from "../components/room/LogManageMenu";
-import { ImageIcon, PanelIcon, SettingsIcon, ThemeIcon, TrashIcon } from "../components/room/RoomBarIcons";
+import {
+  ExitImmersiveIcon,
+  ImageIcon,
+  ImmersiveIcon,
+  PanelIcon,
+  SettingsIcon,
+  ThemeIcon,
+  TrashIcon,
+} from "../components/room/RoomBarIcons";
 import { ErrorBanner } from "../components/room/ErrorBanner";
 import { StillPromptModal } from "../components/room/StillPromptModal";
 import {
@@ -64,6 +72,9 @@ export function RoomPage() {
   const editRoom = useAppStore((s) => s.editRoom);
   const removeRoom = useAppStore((s) => s.removeRoom);
   const updateMemberState = useAppStore((s) => s.updateMemberState);
+  // 没入モード(機能追加: チャットのみ表示): 上部バー・ナビを隠してチャット領域を広げる
+  const immersiveMode = useAppStore((s) => s.immersiveMode);
+  const setImmersiveMode = useAppStore((s) => s.setImmersiveMode);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -183,6 +194,14 @@ export function RoomPage() {
       saveLastRoomId(room.id);
     }
   }, [room?.id]);
+
+  // 没入モード解除(機能追加): ルーム画面を離れるときは必ず通常表示に戻す。
+  // そうしないと、没入モードのままホームやライブラリに遷移した際にナビが消えたままになる。
+  useEffect(() => {
+    return () => {
+      setImmersiveMode(false);
+    };
+  }, [setImmersiveMode]);
 
   if (!room || !id) {
     return (
@@ -366,7 +385,9 @@ export function RoomPage() {
 
   return (
     <div
-      className="mx-auto flex h-screen max-w-3xl flex-col bg-[var(--chat-bg)] px-4 py-4"
+      className={`mx-auto flex h-screen max-w-3xl flex-col bg-[var(--chat-bg)] ${
+        immersiveMode ? "px-2 py-2" : "px-4 py-4"
+      }`}
       style={
         {
           ...chatThemeToCssVars(chatTheme),
@@ -374,7 +395,8 @@ export function RoomPage() {
         } as CSSProperties
       }
     >
-      {/* 上部バー */}
+      {/* 上部バー: 没入モード中は非表示にしてチャット領域を広げる */}
+      {!immersiveMode && (
       <div className="relative flex flex-col gap-2 border-b border-[var(--chat-border)] bg-[var(--chat-surface)] pb-3 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <div className="min-w-0 sm:flex-1">
           <h1 className="truncate text-lg font-bold text-[var(--chat-heading-text)]">{room.name}</h1>
@@ -400,6 +422,15 @@ export function RoomPage() {
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--chat-button-border)] text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
           >
             <ThemeIcon className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setImmersiveMode(true)}
+            title="没入モード(チャットのみ表示)"
+            aria-label="没入モード(チャットのみ表示)"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--chat-button-border)] text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)]"
+          >
+            <ImmersiveIcon className="h-5 w-5" />
           </button>
           <button
             type="button"
@@ -467,6 +498,20 @@ export function RoomPage() {
           </div>
         )}
       </div>
+      )}
+
+      {/* 没入モード解除ボタン(機能追加): 没入モード中のみ右上に半透明で固定表示する */}
+      {immersiveMode && (
+        <button
+          type="button"
+          onClick={() => setImmersiveMode(false)}
+          title="没入モードを終了"
+          aria-label="没入モードを終了"
+          className="fixed right-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-[var(--chat-button-border)] bg-[var(--chat-surface)]/85 text-[var(--chat-button-text)] shadow-lg backdrop-blur hover:bg-[var(--chat-input-bg)]"
+        >
+          <ExitImmersiveIcon className="h-5 w-5" />
+        </button>
+      )}
 
       {/* 中央: チャットログ */}
       <div className="flex-1 overflow-y-auto py-3">

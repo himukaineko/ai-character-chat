@@ -87,3 +87,21 @@ export function ThemeIcon(props: IconProps) {
     </IconBase>
   );
 }
+
+/** 没入モード: 四隅が外に広がる矢印(全画面表示アイコンの作法) */
+export function ImmersiveIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+    </IconBase>
+  );
+}
+
+/** 没入モード解除: 四隅が内に戻る矢印(全画面解除アイコンの作法) */
+export function ExitImmersiveIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
+    </IconBase>
+  );
+}

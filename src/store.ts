@@ -15,6 +15,15 @@ interface AppState {
   /** 初回ロードが完了したか */
   loaded: boolean;
 
+  /**
+   * 没入モード(機能追加: ルーム画面の上部バー・ナビを隠してチャットのみ表示する)。
+   * 永続化はしない(ページ遷移でリセットされてよい)。ルーム画面を離れるときは
+   * RoomPage側のuseEffectクリーンアップで明示的にfalseへ戻し、他画面でナビが
+   * 消えたままにならないようにする。
+   */
+  immersiveMode: boolean;
+  setImmersiveMode: (v: boolean) => void;
+
   /** DBから全データを読み直す */
   loadAll: () => Promise<void>;
 
@@ -56,6 +65,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   roomCharacterStates: [],
   worlds: [],
   loaded: false,
+  immersiveMode: false,
+  setImmersiveMode: (v) => set({ immersiveMode: v }),
 
   loadAll: async () => {
     const [characters, rooms, roomCharacterStates, worlds] = await Promise.all([

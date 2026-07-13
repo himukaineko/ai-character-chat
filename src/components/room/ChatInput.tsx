@@ -277,12 +277,12 @@ export function ChatInput({
         </button>
       </form>
       {mode === "message" ? (
-        <>
-          <p className="mt-1 hidden text-xs text-[var(--chat-placeholder-text)] sm:block">
-            【 】で囲むと行動描写になります(セリフの途中でもOK)/ Shift+Enterで改行
-          </p>
-          <p className="mt-1 text-xs text-[var(--chat-placeholder-text)] sm:hidden">【 】で行動描写</p>
-        </>
+        // モバイル(sm未満)ではヒント行自体を表示しない(機能改善: チャット表示領域の拡大)。
+        // プレースホルダーに同内容の説明(【 】で行動描写。セリフの途中でもOK)が
+        // 既に含まれているため、ヒント行を消しても情報が失われない。
+        <p className="mt-1 hidden text-xs text-[var(--chat-placeholder-text)] sm:block">
+          【 】で囲むと行動描写になります(セリフの途中でもOK)/ Shift+Enterで改行
+        </p>
       ) : (
         <p className="mt-1 text-xs text-[var(--chat-placeholder-text)]">
           投入すると、その話題でキャラたちが話し始めます
