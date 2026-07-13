@@ -4,10 +4,12 @@
 // CSS変数 var(--chat-*) を継承してテーマに連動する。ホーム画面(ダーク固定)から開いたときは
 // テーマ変数が無いため、フォールバック値(従来のダーク配色)でこれまでどおりの見た目になる。
 import { useEffect, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 import type { Character, NarrationLevel, ReplyLength, Room, World } from "../types";
-import { resolveReplyLength } from "../types";
+import { resolveCoverFocalPoint, resolveReplyLength } from "../types";
 import type { RoomInput } from "../lib/rooms";
 import { useBlobUrl } from "../lib/useBlobUrl";
+import { ILLUSTRATION_MAX_DIMENSION, resizeImageBlob } from "../lib/imageResize";
 
 interface RoomFormModalProps {
   open: boolean;
@@ -42,23 +44,56 @@ function emptyForm(): RoomInput {
     replyLength: "normal",
     worldId: undefined,
     coverImage: undefined,
+    coverFocalPoint: undefined,
   };
 }
 
 /**
  * 表紙イラスト(任意)の編集欄。
- * GalleryImagesFieldと同じくトリミングは行わず、選んだ画像をそのまま1枚保存する。
+ * GalleryImagesFieldと同じくトリミングは行わず、選んだ画像をそのまま1枚保存する
+ * (ただし大きすぎる画像は自動で縮小する)。
  * 「削除」でundefinedに戻すと保存時に表紙なしへ更新される。
+ * プレビュー画像をクリックすると、その位置を表示の中心(フォーカルポイント)として保存できる。
  */
 function CoverImageField({
   coverImage,
+  coverFocalPoint,
   onChange,
+  onFocalPointChange,
 }: {
   coverImage: Blob | undefined;
+  coverFocalPoint: { x: number; y: number } | undefined;
   onChange: (blob: Blob | undefined) => void;
+  onFocalPointChange: (point: { x: number; y: number }) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const url = useBlobUrl(coverImage);
+  const [processing, setProcessing] = useState(false);
+  const focal = resolveCoverFocalPoint(coverFocalPoint);
+
+  const handleFile = async (file: File) => {
+    setProcessing(true);
+    try {
+      // 大きすぎる画像だけ縮小してから保存する(容量・動作の圧迫を防ぐため)
+      const resized = await resizeImageBlob(file, ILLUSTRATION_MAX_DIMENSION);
+      onChange(resized);
+      // 画像を変更したらフォーカルポイントは中央にリセットする
+      onFocalPointChange({ x: 50, y: 50 });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handlePreviewClick = (e: MouseEvent<HTMLImageElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const xRatio = ((e.clientX - rect.left) / rect.width) * 100;
+    const yRatio = ((e.clientY - rect.top) / rect.height) * 100;
+    onFocalPointChange({
+      x: Math.min(100, Math.max(0, xRatio)),
+      y: Math.min(100, Math.max(0, yRatio)),
+    });
+  };
 
   return (
     <div>
@@ -72,47 +107,66 @@ function CoverImageField({
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          // トリミング不要でそのまま保存する(fileそのものがBlob)
-          if (file) onChange(file);
+          if (file) void handleFile(file);
           e.target.value = "";
         }}
       />
       {coverImage ? (
         <div>
-          <div className="overflow-hidden rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#27272a)]">
+          <div className="relative overflow-hidden rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#27272a)]">
             {url && (
-              <img src={url} alt="表紙イラストのプレビュー" className="h-28 w-full object-cover" />
+              <img
+                src={url}
+                alt="表紙イラストのプレビュー(クリックで表示位置を指定)"
+                onClick={handlePreviewClick}
+                className="h-28 w-full cursor-crosshair object-cover"
+                style={{ objectPosition: `${focal.x}% ${focal.y}%` }}
+              />
+            )}
+            {/* 現在のフォーカルポイントを示すマーカー */}
+            {url && (
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-indigo-500 shadow"
+                style={{ left: `${focal.x}%`, top: `${focal.y}%` }}
+              />
             )}
           </div>
           <div className="mt-2 flex gap-2">
             <button
               type="button"
+              disabled={processing}
               onClick={() => inputRef.current?.click()}
-              className="rounded-md border border-[var(--chat-button-border,#3f3f46)] px-2.5 py-1 text-xs text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
+              className="rounded-md border border-[var(--chat-button-border,#3f3f46)] px-2.5 py-1 text-xs text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)] disabled:opacity-50"
             >
-              画像を変更
+              {processing ? "処理中…" : "画像を変更"}
             </button>
             <button
               type="button"
+              disabled={processing}
               onClick={() => onChange(undefined)}
-              className="rounded-md border border-[var(--chat-button-border,#3f3f46)] px-2.5 py-1 text-xs text-[var(--chat-danger-text,#f87171)] hover:bg-[var(--chat-input-bg,#27272a)]"
+              className="rounded-md border border-[var(--chat-button-border,#3f3f46)] px-2.5 py-1 text-xs text-[var(--chat-danger-text,#f87171)] hover:bg-[var(--chat-input-bg,#27272a)] disabled:opacity-50"
             >
               削除
             </button>
           </div>
+          <p className="mt-1 text-xs text-[var(--chat-placeholder-text,#71717a)]">
+            画像をクリックすると、そこを中心に表示されます。
+          </p>
         </div>
       ) : (
         <button
           type="button"
+          disabled={processing}
           onClick={() => inputRef.current?.click()}
-          className="flex h-20 w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-[var(--chat-button-border,#52525b)] text-xs text-[var(--chat-placeholder-text,#a1a1aa)] hover:border-indigo-500 hover:text-[var(--chat-accent-text,#a5b4fc)]"
+          className="flex h-20 w-full flex-col items-center justify-center gap-1 rounded-md border border-dashed border-[var(--chat-button-border,#52525b)] text-xs text-[var(--chat-placeholder-text,#a1a1aa)] hover:border-indigo-500 hover:text-[var(--chat-accent-text,#a5b4fc)] disabled:opacity-50"
         >
           <span className="text-lg leading-none">＋</span>
-          <span>画像を追加</span>
+          <span>{processing ? "処理中…" : "画像を追加"}</span>
         </button>
       )}
       <p className="mt-1 text-xs text-[var(--chat-placeholder-text,#71717a)]">
-        トリミングせずそのまま登録され、ホーム画面のルームカードに表紙として表示されます。
+        トリミングせずそのまま登録され(大きすぎる画像は自動で縮小されます)、ホーム画面のルームカードに表紙として表示されます。
       </p>
     </div>
   );
@@ -146,6 +200,8 @@ export function RoomFormModal({
         worldId: room.worldId,
         // 既存ルームはcoverImageを持たない場合がある(表紙なし扱い)
         coverImage: room.coverImage,
+        // 既存ルームはcoverFocalPointを持たない場合がある(中央=50/50扱い)
+        coverFocalPoint: room.coverFocalPoint,
       });
     } else {
       setForm(emptyForm());
@@ -245,7 +301,9 @@ export function RoomFormModal({
 
           <CoverImageField
             coverImage={form.coverImage}
+            coverFocalPoint={form.coverFocalPoint}
             onChange={(blob) => setForm((f) => ({ ...f, coverImage: blob }))}
+            onFocalPointChange={(point) => setForm((f) => ({ ...f, coverFocalPoint: point }))}
           />
 
           {worlds.length > 0 && (

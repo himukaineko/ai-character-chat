@@ -89,6 +89,14 @@ export interface Room {
    * 読み込み側は必ず undefined → 表紙なしとして扱うこと。ルーム画面(チャット)では使用しない。
    */
   coverImage?: Blob;
+  /**
+   * 表紙イラストのフォーカルポイント(機能追加: 表示位置選択)。
+   * x/yは0〜100のパーセンテージで、CSSのobject-positionにそのまま使える値。
+   * 追加前に作成された既存ルーム・coverFocalPoint未設定のルームはこのフィールドを持たないため、
+   * 読み込み側は必ず undefined → 中央(50/50)として扱うこと。直接参照せず
+   * resolveCoverFocalPoint() を経由すること。
+   */
+  coverFocalPoint?: { x: number; y: number };
   createdAt: number;
   updatedAt: number;
 }
@@ -96,6 +104,13 @@ export interface Room {
 /** replyLength未設定(既存ルーム)の場合は "normal" 扱いにする防御的デフォルト */
 export function resolveReplyLength(replyLength: ReplyLength | undefined): ReplyLength {
   return replyLength ?? "normal";
+}
+
+/** coverFocalPoint未設定の場合は中央(50/50)扱いにする防御的デフォルト */
+export function resolveCoverFocalPoint(
+  coverFocalPoint: { x: number; y: number } | undefined,
+): { x: number; y: number } {
+  return coverFocalPoint ?? { x: 50, y: 50 };
 }
 
 /** キャラの参加状態 */

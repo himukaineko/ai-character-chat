@@ -1,8 +1,9 @@
 // イメージイラスト(複数可)の編集欄。
 // アイコンと違いトリミングは行わず、選んだ画像をそのままギャラリーに追加する(自由なサイズ・構図でよい)。
 // 表示順の先頭が旧仕様の「立ち絵(portraitImage)」に相当する(呼び出し元でCharacter.portraitImage / galleryImagesに分解する)。
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { useBlobUrl } from "../lib/useBlobUrl";
+import { ILLUSTRATION_MAX_DIMENSION, resizeImageBlob } from "../lib/imageResize";
 
 interface GalleryImagesFieldProps {
   label: string;
@@ -36,10 +37,17 @@ export function GalleryImagesField({
   onRawImageSelected,
 }: GalleryImagesFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [processing, setProcessing] = useState(false);
 
-  const handleFile = (file: File) => {
-    // トリミング不要でそのまま追加する(fileそのものがBlob)
-    onChange([...images, file]);
+  const handleFile = async (file: File) => {
+    setProcessing(true);
+    try {
+      // 大きすぎる画像だけ縮小してから追加する(容量・動作の圧迫を防ぐため)
+      const resized = await resizeImageBlob(file, ILLUSTRATION_MAX_DIMENSION);
+      onChange([...images, resized]);
+    } finally {
+      setProcessing(false);
+    }
 
     // 「同じ画像からアイコンも作る」導線用に元画像のdata URLも通知しておく
     if (onRawImageSelected) {
@@ -70,21 +78,22 @@ export function GalleryImagesField({
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
-            if (file) handleFile(file);
+            if (file) void handleFile(file);
             e.target.value = "";
           }}
         />
         <button
           type="button"
+          disabled={processing}
           onClick={() => inputRef.current?.click()}
-          className="flex h-24 w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-zinc-600 text-xs text-zinc-400 hover:border-indigo-500 hover:text-indigo-300"
+          className="flex h-24 w-24 shrink-0 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-zinc-600 text-xs text-zinc-400 hover:border-indigo-500 hover:text-indigo-300 disabled:opacity-50"
         >
           <span className="text-lg leading-none">＋</span>
-          <span>画像を追加</span>
+          <span>{processing ? "処理中…" : "画像を追加"}</span>
         </button>
       </div>
       <p className="mt-1 text-xs text-zinc-500">
-        トリミングせずそのまま登録されます。複数枚登録すると、チャットで顔アイコンをタップした際に◀▶で切り替えて見られます。
+        トリミングせずそのまま登録されます(大きすぎる画像は自動で縮小されます)。複数枚登録すると、チャットで顔アイコンをタップした際に◀▶で切り替えて見られます。
       </p>
     </div>
   );

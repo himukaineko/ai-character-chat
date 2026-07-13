@@ -9,6 +9,7 @@ import { getRoomSummaries, type RoomSummary } from "../lib/messages";
 import { loadLastRoomId, loadUserProfile } from "../lib/settings";
 import { useBlobUrl } from "../lib/useBlobUrl";
 import type { Character, Message, Room, World } from "../types";
+import { resolveCoverFocalPoint } from "../types";
 
 function formatUpdatedAt(timestamp: number): string {
   const date = new Date(timestamp);
@@ -106,6 +107,8 @@ function RoomCard({
   const count = summary?.count ?? 0;
   // 表紙イラスト(機能追加)。既存ルームはcoverImageを持たない場合があるため、無ければ従来どおりの見た目
   const coverUrl = useBlobUrl(room.coverImage);
+  // フォーカルポイント(機能追加)。未設定(既存ルーム含む)は中央(50/50)扱い
+  const focal = resolveCoverFocalPoint(room.coverFocalPoint);
 
   return (
     <button
@@ -118,6 +121,7 @@ function RoomCard({
           src={coverUrl}
           alt=""
           className="h-28 w-full shrink-0 object-cover"
+          style={{ objectPosition: `${focal.x}% ${focal.y}%` }}
           loading="lazy"
         />
       )}
@@ -154,6 +158,8 @@ function ContinueCard({
   const preview = formatPreview(summary?.lastMessage ?? null, userDisplayName);
   // 表紙イラスト(機能追加)。あれば背景として敷き、暗めのグラデーションで文字の可読性を守る
   const coverUrl = useBlobUrl(room.coverImage);
+  // フォーカルポイント(機能追加)。未設定(既存ルーム含む)は中央(50/50)扱い
+  const focal = resolveCoverFocalPoint(room.coverFocalPoint);
 
   return (
     <div>
@@ -169,6 +175,7 @@ function ContinueCard({
               src={coverUrl}
               alt=""
               className="absolute inset-0 h-full w-full object-cover"
+              style={{ objectPosition: `${focal.x}% ${focal.y}%` }}
             />
             {/* 表紙の上に暗めのグラデーションを重ねてテキストを保護する */}
             <div

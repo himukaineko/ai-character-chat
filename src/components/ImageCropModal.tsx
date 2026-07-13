@@ -4,6 +4,7 @@
 import { useCallback, useState } from "react";
 import Cropper from "react-easy-crop";
 import type { Area, Point } from "react-easy-crop";
+import { ICON_MAX_DIMENSION, resizeImageBlob } from "../lib/imageResize";
 
 export type CropAspect = "square" | "portrait";
 
@@ -52,7 +53,9 @@ export function ImageCropModal({
     setError(null);
     try {
       const blob = await cropImageToBlob(imageSrc, croppedAreaPixels);
-      onConfirm(blob);
+      // 大きな元画像からトリミングした場合でも肥大化しないよう、必要な場合だけ縮小する
+      const resized = await resizeImageBlob(blob, ICON_MAX_DIMENSION);
+      onConfirm(resized);
       // 次回オープン時に初期状態から始められるようリセットしておく
       setCrop({ x: 0, y: 0 });
       setZoom(1);
