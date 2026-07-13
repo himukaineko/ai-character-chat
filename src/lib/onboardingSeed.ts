@@ -320,7 +320,7 @@ export async function seedOnboardingData(): Promise<void> {
   const mUserMsg3 = mk(
     "タケシ",
     "dialogue",
-    "セリフの中に【 】で動作を書き込むこともできる。例えば――",
+    "セリフの中に、すみつきかっこで動作を書き込むこともできる。例えば――",
     batchUserMsg,
   );
   const mUserMsg4 = mk(
@@ -332,7 +332,7 @@ export async function seedOnboardingData(): Promise<void> {
   const mUserMsg5 = mk(
     "ポポ",
     "dialogue",
-    "その【 】の中、ボクたちのセリフでも使ってるでしょ？あれと同じルールだから、キミが書いても綺麗に表示されるんだよ！",
+    "そのすみつきかっこの中、ボクたちのセリフでも使ってるでしょ？あれと同じルールだから、キミが書いても綺麗に表示されるんだよ！",
     batchUserMsg,
   );
 
@@ -398,10 +398,22 @@ export async function seedOnboardingData(): Promise<void> {
     "説明はこんなところだ。あとは実際に触りながら覚えていくのが一番早い。",
     batchClosing,
   );
+  const mClosingApiKey = mk(
+    "アミ",
+    "dialogue",
+    "ただ、実際に私たちへ話しかけていただく前に一つだけ。まだお済みでなければ、先に設定画面でGeminiのAPIキーを登録しておいてくださいね。それが無いと、私たちは声を出すことができないんです。",
+    batchClosing,
+  );
   const mClosing2 = mk(
     "アミ",
     "dialogue",
     "気になることがあれば、いつでも下の『発言』で話しかけてくださいね。私たちがお応えします。",
+    batchClosing,
+  );
+  const mClosingLimits = mk(
+    "タケシ",
+    "dialogue",
+    "ただ、正直に言っておくと、俺たちも万能じゃない。この部屋で話してないことを聞かれると、見当違いなことを言っちまう時もある。詳しく知りたきゃ、下のナビにある『使い方』のページも覗いてみてくれ。",
     batchClosing,
   );
   const mClosing3 = mk(
@@ -437,7 +449,9 @@ export async function seedOnboardingData(): Promise<void> {
     mMemory3,
     mMemory4,
     mClosing1,
+    mClosingApiKey,
     mClosing2,
+    mClosingLimits,
     mClosing3,
     mClosing4,
   ];
