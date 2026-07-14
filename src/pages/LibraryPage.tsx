@@ -8,6 +8,7 @@ import { CharacterAvatar } from "../components/CharacterAvatar";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { WorldFormModal } from "../components/WorldFormModal";
 import { GroupAssistModal } from "../components/GroupAssistModal";
+import { IconPromptModal } from "../components/IconPromptModal";
 import { exportCharactersToFile, exportWorldToFile } from "../lib/exportImport";
 
 export function LibraryPage() {
@@ -26,6 +27,7 @@ export function LibraryPage() {
   const [exportingId, setExportingId] = useState<string | null>(null);
   const [exportingWorldId, setExportingWorldId] = useState<string | null>(null);
   const [groupAssistOpen, setGroupAssistOpen] = useState(false);
+  const [iconPromptTarget, setIconPromptTarget] = useState<Character | null>(null);
 
   // ワールドタブによるフォルダ分け("all"ならすべてのキャラを表示)
   const [selectedWorldId, setSelectedWorldId] = useState<string | "all">("all");
@@ -233,6 +235,14 @@ export function LibraryPage() {
                 </div>
                 <button
                   type="button"
+                  onClick={() => setIconPromptTarget(c)}
+                  title="外見・性格をもとに、画像生成AI用の顔アイコン作成プロンプトを出力します"
+                  className="w-full rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+                >
+                  顔絵プロンプト
+                </button>
+                <button
+                  type="button"
                   onClick={() => setDeleteTarget(c)}
                   className="w-full rounded-md border border-zinc-700 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10"
                 >
@@ -277,6 +287,12 @@ export function LibraryPage() {
         onCreated={(worldId) => {
           setSelectedWorldId(worldId ?? "all");
         }}
+      />
+
+      <IconPromptModal
+        open={iconPromptTarget !== null}
+        character={iconPromptTarget}
+        onClose={() => setIconPromptTarget(null)}
       />
 
       <WorldFormModal
