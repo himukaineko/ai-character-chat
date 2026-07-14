@@ -523,15 +523,6 @@ export function RoomPage() {
 
       {/* 中央: チャットログ */}
       <div className="flex-1 overflow-y-auto py-3">
-        {error && (
-          <ErrorBanner
-            message={error.message}
-            kind={error.kind}
-            onDismiss={() => setError(null)}
-            theme={chatTheme}
-          />
-        )}
-
         {/* pinned記憶と新記憶の矛盾: 自動では無効化せず、ユーザーに確認を出す(仕様書6.3) */}
         {/* light/naturalの明るいサーフェスでも読めるよう、暗背景専用の半透明amberを避けてテーマごとに配色を分ける */}
         {pinnedConflicts.map((conflict, index) => (
@@ -608,6 +599,20 @@ export function RoomPage() {
 
         <div ref={logEndRef} />
       </div>
+
+      {/* エラーバナー(バグ修正): チャットログ内(スクロール領域の先頭)に出すと、
+          ログが伸びている最中はスクロール位置によって画面外に隠れてしまい、
+          エラーに気づけないという報告があった。スクロール位置に関係なく必ず
+          目に入るよう、スクロール領域の外(入力エリアの直上)に固定で表示する。
+          没入モード中も上部バーが消えるだけでこの位置は変わらないため、引き続き見える。 */}
+      {error && (
+        <ErrorBanner
+          message={error.message}
+          kind={error.kind}
+          onDismiss={() => setError(null)}
+          theme={chatTheme}
+        />
+      )}
 
       {/* 下部入力エリア */}
       <ChatInput

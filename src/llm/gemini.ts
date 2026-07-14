@@ -1,9 +1,65 @@
 // Gemini API実装(仕様書9.1)
 // @google/genai SDKを使い、ブラウザから直接Gemini APIを呼び出す(BYOK方式)。
 // APIキーはコンストラクタ引数として受け取るのみで、ここでは一切ログに出さない・保存しない。
-import { GoogleGenAI, ApiError } from "@google/genai";
+import { GoogleGenAI, ApiError, HarmCategory, HarmBlockThreshold } from "@google/genai";
+import type { GenerateContentResponse } from "@google/genai";
 import type { BuiltPrompt, GeneratedBatch, LLMClient } from "./types";
 import { LLMError, LLM_ERROR_MESSAGES } from "./types";
+
+/**
+ * セーフティ設定(改善: 過剰ブロック回避)。
+ * キャラクター創作アプリの性質上、通常の会話・行動描写・多少際どい表現までもが
+ * 安全性フィルタで過剰にブロックされると体験を大きく損なう。そのため4カテゴリすべてを
+ * 「高リスクのみブロック」(BLOCK_ONLY_HIGH)に緩めておく。それでもブロックされた場合は
+ * generateConversation/generateText側でblockReason・finishReasonを読み取り、
+ * 理由付きのメッセージを表示する(空応答の原因が分かるようにする対応とセットで運用する)。
+ */
+const SAFETY_SETTINGS = [
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+  {
+    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+  },
+  {
+    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+  },
+];
+
+/**
+ * finishReason / blockReason を日本語の分かりやすい説明に変換するマップ。
+ * 一覧にないコードはそのままコード表示にフォールバックする(改善: 空応答時の理由表示)。
+ */
+const FINISH_REASON_LABELS: Record<string, string> = {
+  SAFETY: "安全性フィルタ",
+  RECITATION: "既存コンテンツとの類似",
+  MAX_TOKENS: "長さ上限",
+  PROHIBITED_CONTENT: "禁止コンテンツ",
+  BLOCKLIST: "禁止用語の使用",
+  SPII: "個人情報の可能性",
+  LANGUAGE: "非対応の言語",
+  OTHER: "その他の理由",
+};
+
+function describeBlockCode(code: string | undefined): string {
+  if (!code) return "";
+  const label = FINISH_REASON_LABELS[code];
+  return label ? `${code}=${label}` : code;
+}
+
+/**
+ * candidatesが空/テキストが空だった場合に、promptFeedback.blockReasonや
+ * candidates[0].finishReasonから理由が読み取れれば日本語メッセージにして返す。
+ * 理由が読み取れない場合はnullを返し、呼び出し側で従来のメッセージにフォールバックする。
+ */
+function describeEmptyResponseReason(response: GenerateContentResponse): string | null {
+  const blockReason = response.promptFeedback?.blockReason;
+  const finishReason = response.candidates?.[0]?.finishReason;
+  const code = blockReason ?? finishReason;
+  if (!code) return null;
+  return `応答がブロックされました(理由: ${describeBlockCode(code)})。表現を変えて再試行するか、内容を調整してください。`;
+}
 
 export class GeminiClient implements LLMClient {
   private readonly ai: GoogleGenAI;
@@ -24,8 +80,9 @@ export class GeminiClient implements LLMClient {
   /** 会話生成: responseSchemaで構造化出力(仕様書9.3)を強制する */
   async generateConversation(prompt: BuiltPrompt, schema: object): Promise<GeneratedBatch> {
     let text: string | undefined;
+    let response: GenerateContentResponse;
     try {
-      const response = await this.ai.models.generateContent({
+      response = await this.ai.models.generateContent({
         model: this.modelId,
         contents: prompt.userContent,
         config: {
@@ -33,6 +90,7 @@ export class GeminiClient implements LLMClient {
           responseMimeType: "application/json",
           // SDKのSchema型はunknownも受け付けるため、9.3のスキーマ定義をそのまま渡す
           responseSchema: schema as never,
+          safetySettings: SAFETY_SETTINGS,
         },
       });
       text = response.text;
@@ -41,7 +99,12 @@ export class GeminiClient implements LLMClient {
     }
 
     if (!text) {
-      throw new LLMError("invalidResponse", "AIから空の応答が返されました。もう一度お試しください。");
+      // 改善: 空応答時はセーフティブロック等の理由が読み取れれば日本語で表示する
+      const reason = describeEmptyResponseReason(response);
+      throw new LLMError(
+        "invalidResponse",
+        reason ?? "AIから空の応答が返されました。もう一度お試しください。",
+      );
     }
 
     try {
@@ -64,7 +127,17 @@ export class GeminiClient implements LLMClient {
       const response = await this.ai.models.generateContent({
         model: this.modelId,
         contents: prompt,
+        config: {
+          safetySettings: SAFETY_SETTINGS,
+        },
       });
+      if (!response.text) {
+        // 改善: こちらも空応答時はブロック理由が分かれば日本語で表示する
+        const reason = describeEmptyResponseReason(response);
+        if (reason) {
+          throw new LLMError("invalidResponse", reason);
+        }
+      }
       return response.text ?? "";
     } catch (err) {
       throw toLLMError(err);

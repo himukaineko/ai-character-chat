@@ -22,6 +22,17 @@
   }
 }
 
+/*
+ * バグ修正: fill-mode「both」だとアニメーション終了後もtoキーフレームの
+ * transform: translateY(0) が要素に残り続け、CSS上「transform: none」ではなくなる。
+ * transformが none 以外の値(たとえ見た目上は恒等変換でも)を持つ要素は
+ * position: fixed な子孫にとっての新しい包含ブロックになってしまうため、
+ * メッセージの「⋯」メニュー(fixed配置)がビューポートではなく、この
+ * メッセージ行を基準に配置されてしまい、ログが長いほど大きくずれて表示される
+ * 不具合の原因になっていた。fill-modeを外し、アニメーション終了後は
+ * transform/opacityともに要素本来の値(transformなし)に戻すことで、
+ * fixed要素の基準を常にビューポートに保つ。
+ */
 .animate-message-in {
-  animation: message-fade-in 0.25s ease-out both;
+  animation: message-fade-in 0.25s ease-out;
 }

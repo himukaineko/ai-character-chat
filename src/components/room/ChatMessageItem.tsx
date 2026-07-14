@@ -3,6 +3,7 @@
 // メッセージ操作(ここまで戻る/削除/コピー)は「⋯」ボタンから開くメニューで提供する
 // (デスクトップはhoverで目立たせ、モバイルはボタン自体を常時タップ可能にすることで長押し相当の操作性を確保する)。
 import { useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import type { Character, Message } from "../../types";
 import { getCharacterGallery } from "../../types";
 import { CharacterAvatar } from "../CharacterAvatar";
@@ -83,44 +84,54 @@ export function ChatMessageItem({ message, character, onRewind, onDelete }: Chat
       >
         ⋯
       </button>
-      {menuOpen && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
-          {/* テーマ統一(機能修正): 黒固定をやめ、テーマのサーフェス色で表示する */}
-          <div
-            className="fixed z-50 rounded-lg border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#18181b)] p-1 text-sm shadow-xl"
-            style={menuStyle}
-          >
-            <button
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                onRewind(message.id);
-              }}
-              className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
+      {menuOpen &&
+        // バグ修正: メニューをこの場でfixed配置するだけだと、祖先要素(例:
+        // メッセージ出現アニメーションのtransform)がCSS上の新しい包含ブロックに
+        // なっている場合、fixedの基準がビューポートではなくその祖先になってしまい、
+        // ログが長いほどボタンから大きく離れた位置にメニューが表示されてしまう
+        // (index.cssのアニメーションfill-mode修正が本質的な原因対応だが、将来
+        // 他の祖先にtransform/filter等が付いても影響を受けないよう、document.body
+        // 直下にポータルで描画し、ビューポート基準の座標計算(calcDropdownStyle)が
+        // 常にそのまま通用するようにする)。
+        createPortal(
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+            {/* テーマ統一(機能修正): 黒固定をやめ、テーマのサーフェス色で表示する */}
+            <div
+              className="fixed z-50 rounded-lg border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#18181b)] p-1 text-sm shadow-xl"
+              style={menuStyle}
             >
-              ここまで戻る
-            </button>
-            <button
-              type="button"
-              onClick={handleCopy}
-              className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
-            >
-              コピー
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                onDelete(message.id);
-              }}
-              className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--chat-danger-text,#f87171)] hover:bg-red-500/10"
-            >
-              削除
-            </button>
-          </div>
-        </>
-      )}
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onRewind(message.id);
+                }}
+                className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
+              >
+                ここまで戻る
+              </button>
+              <button
+                type="button"
+                onClick={handleCopy}
+                className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
+              >
+                コピー
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDelete(message.id);
+                }}
+                className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--chat-danger-text,#f87171)] hover:bg-red-500/10"
+              >
+                削除
+              </button>
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   );
 
