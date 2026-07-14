@@ -10,20 +10,22 @@ import { LLMError, LLM_ERROR_MESSAGES } from "./types";
  * セーフティ設定(改善: 過剰ブロック回避)。
  * キャラクター創作アプリの性質上、通常の会話・行動描写・多少際どい表現までもが
  * 安全性フィルタで過剰にブロックされると体験を大きく損なう。そのため4カテゴリすべてを
- * 「高リスクのみブロック」(BLOCK_ONLY_HIGH)に緩めておく。それでもブロックされた場合は
- * generateConversation/generateText側でblockReason・finishReasonを読み取り、
- * 理由付きのメッセージを表示する(空応答の原因が分かるようにする対応とセットで運用する)。
+ * SDKが提供する範囲で最も緩い「ブロックしない」(BLOCK_NONE)に設定する
+ * (さらに緩い"OFF"はフィルタそのものを無効化するが、対応していないモデルではAPIエラーに
+ * なるため採用しない)。それでもブロックされた場合はgenerateConversation/generateText側で
+ * blockReason・finishReasonを読み取り、理由付きのメッセージを表示する
+ * (空応答の原因が分かるようにする対応とセットで運用する)。
  */
 const SAFETY_SETTINGS = [
-  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
-  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH },
+  { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+  { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
   {
     category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
   },
   {
     category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-    threshold: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+    threshold: HarmBlockThreshold.BLOCK_NONE,
   },
 ];
 
