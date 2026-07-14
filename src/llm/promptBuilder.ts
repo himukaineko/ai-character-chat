@@ -60,7 +60,7 @@ const REGENERATE_OPTION_INSTRUCTIONS: Record<RegenerateOption, string> = {
 const NARRATION_INSTRUCTIONS: Record<NarrationLevel, string> = {
   none: "地の文・ナレーションは一切出力しないでください。type: \"dialogue\" のセリフのみを出力してください。",
   light:
-    "セリフ中心に、文中の【 】または action フィールドで軽い動作・表情の補足を添えてください。narration発言は使っても最小限にしてください。",
+    "セリフのテンポには変化をつけてください。毎回セリフと行動描写をセットにする必要はありません。セリフだけが続く場面があってもよいですし、逆に行動描写だけで間を持たせる一言があってもよいです。テンポの良い場面では描写を省き、感情を掘り下げたい場面でだけ描写を入れる、というように使い分けてください。narration発言は使っても最小限にしてください。",
   novel: "小説のような地の文(type: \"narration\")を、セリフの合間に適度に織り交ぜてください。",
   narrator:
     "ナレーター役(speaker: \"narration\", type: \"narration\")の発話も積極的に使い、場面の状況を説明してください。",
@@ -141,8 +141,17 @@ export function buildConversationPrompt(params: PromptBuildParams): BuiltPrompt 
   // 観察用の「次の会話を生成」・自動連続生成・トピック投入は対象外)。
   const isSingleReplyMode = isSingleReplyTrigger(members, trigger);
 
+  // 返事の長さは出力方針セクション(末尾)だけでは効きが弱いという指摘があったため、
+  // システム指示側にも明示的に渡し、冒頭の強い指示として伝える(末尾にも二重で残す)。
+  const replyLength = resolveReplyLength(room.replyLength);
+
   // ---- 1. システム指示(役割・出力形式・禁止事項。会話内容には依存しない) ----
-  const systemInstruction = buildSystemInstruction(includedNames, absentNames, isSingleReplyMode);
+  const systemInstruction = buildSystemInstruction(
+    includedNames,
+    absentNames,
+    isSingleReplyMode,
+    replyLength,
+  );
 
   const sections: string[] = [];
 
@@ -187,8 +196,8 @@ export function buildConversationPrompt(params: PromptBuildParams): BuiltPrompt 
   // ---- 11. 現在のトピック / ユーザー発言 ----
   sections.push(buildTriggerSection(trigger));
 
-  // ---- 12. ナレーションレベル指示 + 返事の長さ指示 ----
-  const replyLength = resolveReplyLength(room.replyLength);
+  // ---- 12. ナレーションレベル指示 + 返事の長さ指示(冒頭のシステム指示と重複するが、
+  // 末尾でも再度伝えることで長さの指示をより確実に効かせる) ----
   const narrationLines = [
     "## 出力方針(ナレーションレベル: " + narrationLevelLabel(room.narrationLevel) + ")",
     NARRATION_INSTRUCTIONS[room.narrationLevel],
@@ -224,20 +233,36 @@ function narrationLevelLabel(level: NarrationLevel): string {
   }
 }
 
+/**
+ * 返事の長さの指示を、システム指示(冒頭の強い指示)側でも伝えるための文面。
+ * REPLY_LENGTH_INSTRUCTIONS(出力方針セクション末尾)と同じ内容方針を踏襲しつつ、
+ * 「必ず守るべき指示」であることが伝わる言い回しにする。normalは既定なので特に触れない。
+ */
+const REPLY_LENGTH_SYSTEM_INSTRUCTIONS: Record<ReplyLength, string> = {
+  short: "各発言は1〜2文程度の短いテンポを守ってください。セリフは簡潔に、地の文も最小限に留めること。",
+  normal: "",
+  long: "各発言はやや長めに、感情や思考の描写も含めてじっくり書いてください。セリフも地の文も丁寧に描写すること。",
+};
+
 function buildSystemInstruction(
   includedNames: Set<string>,
   absentNames: string[],
   isSingleReplyMode: boolean,
+  replyLength: ReplyLength,
 ): string {
   const roster = Array.from(includedNames);
   const batchSizeInstruction = isSingleReplyMode
     ? "今回はユーザーへの返事として、そのキャラクターの発言を1つだけ生成してください。複数の発言を出力しないでください。"
     : "1回の出力につき、2〜6発言程度の複数キャラの発言をまとめて生成してください。";
+  const replyLengthSystemInstruction = REPLY_LENGTH_SYSTEM_INSTRUCTIONS[replyLength];
   const lines = [
     "あなたは、複数のAIキャラクターが登場する会話生成アプリのバックエンドです。",
     "与えられたキャラクター設定・世界観・記憶・会話ログに基づき、キャラクターたちの自然な会話の続きを生成してください。",
     "出力は必ず指定された構造化スキーマ(JSON)で返し、それ以外の説明文・前置き・後書きは一切出力しないでください。",
     batchSizeInstruction,
+    // 機能追加(合意事項1): 返事の長さの指示が末尾の出力方針セクションだけでは効きが弱いとの
+    // 指摘があったため、冒頭の強い指示としても明示する(末尾にも同じ趣旨を残し二重で伝える)。
+    replyLengthSystemInstruction ? `返事の長さについて: ${replyLengthSystemInstruction}` : "",
     roster.length > 0
       ? `speaker には次の名前のみを使用できます: ${roster.join("、")}(narration発言の場合のみ speaker は "narration" としてください)。`
       : "",
@@ -252,6 +277,14 @@ function buildSystemInstruction(
     "各キャラクターは、与えられた性格・口調・関係性を一貫して守ってください。ハード制約(hardConstraints)は絶対に破らないでください。",
     "キャラクター同士の関係に呼び方の指定がある場合は、セリフの中でその呼び方に従ってください。",
     "ユーザーに対して過度に迎合したり、キャラクター性を無視した説明口調にならないようにしてください。",
+    // 機能追加(合意事項2): キャラクター設定はセリフで説明・暗唱させるためのものではなく、
+    // 内面の一貫性を保つための背景情報である、という基本方針を伝える。
+    // ただし自然な流れでの告白・打ち明け話までは抑制しないよう「基本的には」という言い回しにする。
+    "キャラクター設定(性格・背景・秘密・好き嫌いなど)は、その人物の内面の一貫性を保つための情報です。基本的には、セリフの中でこれらをそのまま説明したり、自己紹介のように語ったりしないでください。性格は言葉選びや反応の仕方ににじませ、背景や秘密は本人が語るのではなく、会話の流れや行動描写を通じて自然に匂わせる程度に留めてください(ただし、話の流れで本人が自然に打ち明ける展開そのものを禁止するものではありません)。",
+    // 機能追加(合意事項4): 発言配分を機械的な均等割り・順番回しにしない。
+    "発言の配分は、性格や話の流れ、場面に応じて自然に決まるようにしてください。ある話題では特定のキャラが中心になり、別の場面では全員が均等に盛り上がってもかまいません。「毎回順番に全員へ発言を割り振る」ような機械的なターン制にだけはしないでください。",
+    // 機能追加(合意事項5): 短い相槌・一言だけの発言も自然な選択肢として許容する。
+    "セリフは必ずしもまとまった長さである必要はありません。「え」「マジで」「うそ」のような短い相槌や一言だけの発言も、1つの発言として自然に使ってください。",
   ];
   return lines.filter(Boolean).join("\n");
 }
