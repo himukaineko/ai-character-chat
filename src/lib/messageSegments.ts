@@ -27,7 +27,9 @@ export function splitMessageSegments(raw: string): MessageSegment[] {
     const before = raw.slice(lastIndex, matchIndex).trim();
     if (before) segments.push({ kind: "dialogue", text: before });
 
-    const inner = match[1].trim();
+    // AIが行動描写の文末に句点(。)を付けてしまう生成傾向があるため、表示時に除去する。
+    // 感嘆符(！)・疑問符(？)・三点リーダー(…)は表現として意図的に使われうるため対象外。
+    const inner = match[1].trim().replace(/。+$/, "").trim();
     if (inner) segments.push({ kind: "action", text: inner });
 
     lastIndex = matchIndex + match[0].length;
