@@ -148,8 +148,8 @@ export function ChatMessageItem({ message, character, onRewind, onDelete }: Chat
 
   if (message.type === "narration") {
     return (
-      <div className="animate-message-in group my-2 flex items-start justify-center gap-1 px-6 text-center">
-        <p className="max-w-lg whitespace-pre-wrap text-[length:var(--chat-font-size,0.875rem)] italic leading-relaxed text-[var(--chat-narration-text)]">
+      <div className="animate-message-in group my-2 flex items-start justify-center gap-1 px-6">
+        <p className="max-w-lg whitespace-pre-wrap text-left text-[length:var(--chat-font-size,0.875rem)] italic leading-relaxed text-[var(--chat-narration-text)]">
           {message.text}
         </p>
         {ActionMenuButton}

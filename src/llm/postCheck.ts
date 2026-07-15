@@ -59,6 +59,18 @@ export function runPostCheck(batch: GeneratedBatch, ctx: PostCheckContext): Post
     return resolved ? { ...m, speaker: resolved } : m;
   });
 
+  // バグ対策: プロンプトでdialogue限定と明記していても、AIがnarrationのtextにも
+  // セリフ用の【 】(行動描写)記法を紛れ込ませてしまうことがある。
+  // narrationはもともと文章全体が地の文なので、この記法は表示上不要な記号でしかない。
+  // 中身の文章を失わないよう、括弧の文字だけを取り除き内容はそのまま残す
+  // (dialogue側のsplitMessageSegmentsのような「中身を別セグメント化する」処理は、
+  // 地の文の途中で表示が分断されてしまい narration の見た目には合わないため採用しない)。
+  messages = messages.map((m) =>
+    m.type === "narration" && /[【】]/.test(m.text)
+      ? { ...m, text: m.text.replace(/[【】]/g, "") }
+      : m,
+  );
+
   for (const m of messages) {
     if (m.type !== "dialogue") continue;
     if (absentSet.has(m.speaker)) {
