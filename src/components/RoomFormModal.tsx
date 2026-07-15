@@ -45,6 +45,7 @@ function emptyForm(): RoomInput {
     worldId: undefined,
     coverImage: undefined,
     coverFocalPoint: undefined,
+    narratorStyle: "",
   };
 }
 
@@ -202,6 +203,8 @@ export function RoomFormModal({
         coverImage: room.coverImage,
         // 既存ルームはcoverFocalPointを持たない場合がある(中央=50/50扱い)
         coverFocalPoint: room.coverFocalPoint,
+        // 既存ルームはnarratorStyleを持たない場合がある(未設定=空文字扱い)
+        narratorStyle: room.narratorStyle ?? "",
       });
     } else {
       setForm(emptyForm());
@@ -400,6 +403,24 @@ export function RoomFormModal({
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-[var(--chat-button-text,#d4d4d8)]">
+              地の文・ナレーターのカスタム(任意)
+            </label>
+            <textarea
+              value={form.narratorStyle ?? ""}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, narratorStyle: e.target.value }))
+              }
+              rows={2}
+              placeholder="例: 軽快なテンポで/ツッコミ役のように/二人称視点(『あなたは』で語りかける)で"
+              className="w-full resize-none rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#27272a)] px-3 py-2 text-sm text-[var(--chat-input-text,#f4f4f5)] outline-none placeholder:text-[var(--chat-placeholder-text,#71717a)] focus:border-indigo-500"
+            />
+            <p className="mt-1 text-xs text-[var(--chat-placeholder-text,#71717a)]">
+              ナレーションレベルが「なし」以外のときに効果があります。
+            </p>
           </div>
 
           <div>

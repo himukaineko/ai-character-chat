@@ -97,6 +97,15 @@ export interface Room {
    * resolveCoverFocalPoint() を経由すること。
    */
   coverFocalPoint?: { x: number; y: number };
+  /**
+   * ナレーター・地の文のカスタム文体設定(機能追加)。
+   * 「軽快なテンポで」「ツッコミ役のように」「二人称視点で」のような自由記述で、
+   * narrationLevel(地の文の"量")とは別に文体・語り口を指定できるようにする。
+   * 追加前に作成された既存ルームはこのフィールドを持たない(DBマイグレーションは行わない)ため、
+   * 読み込み側は必ず undefined → 未設定(指定なし)として扱うこと。空文字・undefinedのどちらも
+   * 「カスタム指定なし」を意味し、プロンプトには何も追加しない。
+   */
+  narratorStyle?: string;
   createdAt: number;
   updatedAt: number;
 }

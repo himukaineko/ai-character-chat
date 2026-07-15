@@ -202,6 +202,14 @@ export function buildConversationPrompt(params: PromptBuildParams): BuiltPrompt 
     "## 出力方針(ナレーションレベル: " + narrationLevelLabel(room.narrationLevel) + ")",
     NARRATION_INSTRUCTIONS[room.narrationLevel],
   ];
+  // 機能追加: ナレーター・地の文のカスタム文体設定(自由記述)。
+  // narrationLevelが"none"の場合はそもそも地の文自体を出力しない指示が優先されるため、
+  // narratorStyleが入力されていても実害はない(セリフのみという指示と矛盾しても、
+  // 「出力しない」という指示のほうが具体的で強いため上書きされる想定)。よって
+  // narrationLevelによる分岐はせず、常に追加する実装とする。
+  if (room.narratorStyle && room.narratorStyle.trim() !== "") {
+    narrationLines.push(`地の文・ナレーターの文体について: ${room.narratorStyle.trim()}`);
+  }
   const replyLengthInstruction = REPLY_LENGTH_INSTRUCTIONS[replyLength];
   if (replyLengthInstruction) {
     narrationLines.push(replyLengthInstruction);
