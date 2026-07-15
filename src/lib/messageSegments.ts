@@ -33,6 +33,12 @@ export function splitMessageSegments(raw: string): MessageSegment[] {
     if (inner) segments.push({ kind: "action", text: inner });
 
     lastIndex = matchIndex + match[0].length;
+
+    // 【 】の外側(直後)に単独で句点が続くケースも同じ生成傾向の一部のため除去する。
+    // 例:「それは【少し笑って】。冗談だよ」→ 】の直後の「。」を読み飛ばす。
+    while (raw[lastIndex] === "。") {
+      lastIndex += 1;
+    }
   }
 
   const rest = raw.slice(lastIndex).trim();
