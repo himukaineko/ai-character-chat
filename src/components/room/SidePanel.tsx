@@ -2,7 +2,7 @@
 // タブ2つ: 「メンバー」(参加状態一括管理)と「記憶」(fact/relationshipの一覧、編集・削除・固定・キャラ設定に昇格)。
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { Character, Memory, Presence, RoomCharacterState } from "../../types";
+import type { Character, Memory, MemoryType, Presence, RoomCharacterState } from "../../types";
 import { CharacterAvatar } from "../CharacterAvatar";
 import { ConfirmDialog } from "../ConfirmDialog";
 import {
@@ -10,13 +10,15 @@ import {
   promoteMemoryToCharacter,
   type PromotionTarget,
 } from "../../lib/characters";
-import { deleteMemory, updateMemory } from "../../lib/memories";
+import { createManualMemory, deleteMemory, updateMemory } from "../../lib/memories";
 import type { SummarizeOutcome } from "../../llm/memoryService";
 import { LLMError, LLM_ERROR_MESSAGES, type LLMErrorKind } from "../../llm/types";
 
 interface SidePanelProps {
   open: boolean;
   onClose: () => void;
+  /** 手動での記憶追加(createManualMemory)に必要 */
+  roomId: string;
   members: { character: Character; state: RoomCharacterState }[];
   memories: Memory[];
   /** 会話が1件でもあるか(手動整理ボタンの有効/無効判定に使う) */
@@ -43,6 +45,7 @@ const presenceOptions: { value: Presence; label: string }[] = [
 export function SidePanel({
   open,
   onClose,
+  roomId,
   members,
   memories,
   hasMessages,
@@ -61,6 +64,9 @@ export function SidePanel({
   const [organizeError, setOrganizeError] = useState<{ message: string; kind?: LLMErrorKind } | null>(
     null,
   );
+
+  // 手動追加(「+ 新規記憶を追加」ボタン)の開閉状態
+  const [addFormOpen, setAddFormOpen] = useState(false);
 
   if (!open) return null;
 
@@ -198,6 +204,28 @@ export function SidePanel({
               <p className="text-xs text-[var(--chat-placeholder-text,#71717a)]">
                 会話から自動抽出された記憶です。固定した記憶は自動整理の対象外になります。「昇格」でキャラ本体の設定に反映できます。
               </p>
+
+              {/* 手動追加(機能追加): 会話からの自動抽出とは別に、ルームの前提・設定を自分で書き加える */}
+              <div className="rounded-md border border-[var(--chat-border,#27272a)] bg-[var(--chat-input-bg,#18181b)] p-2">
+                <button
+                  type="button"
+                  onClick={() => setAddFormOpen((v) => !v)}
+                  className="rounded-md border border-[var(--chat-button-border,#3f3f46)] px-3 py-1.5 text-xs text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-surface,#27272a)]"
+                >
+                  {addFormOpen ? "− 閉じる" : "+ 新規記憶を追加"}
+                </button>
+                {addFormOpen && (
+                  <AddMemoryForm
+                    roomId={roomId}
+                    members={members}
+                    onCancel={() => setAddFormOpen(false)}
+                    onAdded={() => {
+                      setAddFormOpen(false);
+                      onMemoriesChanged();
+                    }}
+                  />
+                )}
+              </div>
 
               {/* 手動整理: 発言数がトリガーに達していなくても今すぐ要約+記憶抽出を実行する */}
               <div className="rounded-md border border-[var(--chat-border,#27272a)] bg-[var(--chat-input-bg,#18181b)] p-2">
@@ -467,6 +495,156 @@ function MemoryRow({
         </>
       )}
     </li>
+  );
+}
+
+const memoryTypeOptions: { value: MemoryType; label: string }[] = [
+  { value: "fact", label: "事実" },
+  { value: "relationship", label: "関係性" },
+];
+
+/**
+ * 記憶の手動追加フォーム(機能追加)。
+ * 会話からの自動抽出とは別に、ユーザーが「実はこの二人は元恋人同士」のようなルームの
+ * 前提・設定を記憶として直接書き込めるようにする。createManualMemory() を呼ぶだけの
+ * シンプルなインライン展開フォーム(モーダルは使わない)。
+ * 対象キャラは「参加」「聞いている」のみ(不参加キャラは選べない。仕様書の除外原則に合わせる)。
+ */
+function AddMemoryForm({
+  roomId,
+  members,
+  onCancel,
+  onAdded,
+}: {
+  roomId: string;
+  members: { character: Character; state: RoomCharacterState }[];
+  onCancel: () => void;
+  onAdded: () => void;
+}) {
+  const [type, setType] = useState<MemoryType>("fact");
+  const [subjectIds, setSubjectIds] = useState<string[]>([]);
+  const [content, setContent] = useState("");
+  const [pinned, setPinned] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // 対象キャラ候補: 不参加(absent)を除いたルームメンバーのみ
+  const candidates = members.filter((m) => m.state.presence !== "absent");
+
+  const toggleSubject = (id: string) => {
+    setSubjectIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const handleSave = async () => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    try {
+      const memory = await createManualMemory(roomId, type, subjectIds, trimmed);
+      // createManualMemory は常に pinned: true で作成するため、
+      // 「固定する」のチェックを外していた場合はここで固定解除する
+      if (!pinned) {
+        await updateMemory(memory.id, { pinned: false });
+      }
+      setType("fact");
+      setSubjectIds([]);
+      setContent("");
+      setPinned(true);
+      onAdded();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 space-y-2 rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#27272a)] p-2">
+      <div>
+        <label className="mb-1 block text-[11px] font-medium text-[var(--chat-button-text,#d4d4d8)]">種別</label>
+        <div className="flex gap-1">
+          {memoryTypeOptions.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setType(opt.value)}
+              className={`rounded-md px-2 py-1 text-xs ${
+                type === opt.value
+                  ? "bg-indigo-600 text-white"
+                  : "border border-[var(--chat-button-border,#3f3f46)] text-[var(--chat-muted-text,#a1a1aa)] hover:bg-[var(--chat-input-bg,#18181b)]"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-[11px] font-medium text-[var(--chat-button-text,#d4d4d8)]">
+          対象キャラ(複数選択可)
+        </label>
+        <div className="flex flex-wrap gap-1.5">
+          <label className="flex items-center gap-1 rounded-md border border-[var(--chat-button-border,#3f3f46)] px-1.5 py-0.5 text-[11px] text-[var(--chat-muted-text,#a1a1aa)]">
+            <input
+              type="checkbox"
+              checked={subjectIds.includes("user")}
+              onChange={() => toggleSubject("user")}
+            />
+            ユーザー
+          </label>
+          {candidates.map(({ character }) => (
+            <label
+              key={character.id}
+              className="flex items-center gap-1 rounded-md border border-[var(--chat-button-border,#3f3f46)] px-1.5 py-0.5 text-[11px] text-[var(--chat-muted-text,#a1a1aa)]"
+            >
+              <input
+                type="checkbox"
+                checked={subjectIds.includes(character.id)}
+                onChange={() => toggleSubject(character.id)}
+              />
+              {character.name}
+            </label>
+          ))}
+          {candidates.length === 0 && (
+            <span className="text-[11px] text-[var(--chat-placeholder-text,#52525b)]">
+              参加中のキャラがいません。
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-[11px] font-medium text-[var(--chat-button-text,#d4d4d8)]">内容</label>
+        <textarea
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          rows={2}
+          placeholder="例: 実はこの二人は元恋人同士"
+          className="w-full resize-none rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#18181b)] px-2 py-1 text-xs text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
+        />
+      </div>
+
+      <label className="flex items-center gap-1.5 text-[11px] text-[var(--chat-muted-text,#a1a1aa)]">
+        <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} />
+        固定する(自動整理で消えないようにする。通常の記憶一覧の「固定」と同じ意味です)
+      </label>
+
+      <div className="flex justify-end gap-1">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded px-2 py-1 text-xs text-[var(--chat-placeholder-text,#71717a)] hover:text-[var(--chat-button-text,#d4d4d8)]"
+        >
+          キャンセル
+        </button>
+        <button
+          type="button"
+          disabled={!content.trim() || saving}
+          onClick={() => void handleSave()}
+          className="rounded bg-indigo-600 px-3 py-1 text-xs text-white hover:bg-indigo-500 disabled:opacity-50"
+        >
+          {saving ? "保存中…" : "保存"}
+        </button>
+      </div>
+    </div>
   );
 }
 

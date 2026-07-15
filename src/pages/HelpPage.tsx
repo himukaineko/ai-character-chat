@@ -277,6 +277,10 @@ export function HelpPage() {
               パネルの<Tag>記憶</Tag>タブから、固定(消えないようにする)・編集・削除・キャラ本体への昇格ができます。
             </Bullet>
             <Bullet>記憶はルームごとに独立しています。同じキャラでも別のルームでは別の記憶を持ちます。</Bullet>
+            <Bullet>
+              パネルの<Tag>記憶</Tag>タブにある<Tag>+ 新規記憶を追加</Tag>から、「実はこの二人は元恋人同士」のような
+              ルームの前提・設定を自分で書き加えることもできます。
+            </Bullet>
           </BulletList>
           <div className="mt-3">
             <NoteBox label="重要">

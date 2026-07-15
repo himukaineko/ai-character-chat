@@ -33,6 +33,34 @@ export async function createMemory(input: MemoryInput): Promise<Memory> {
   return memory;
 }
 
+/**
+ * ユーザーが手動で記憶(ルームの前提・設定)を1件作成する(機能追加)。
+ * 会話からの自動抽出とは異なり出どころの発言が無いため sourceMessageIds は空配列にする。
+ * ユーザーが直接書いた前提は自動整理(矛盾検出による無効化)で不意に消えてほしくないため、
+ * pinned は常に true 固定とする(呼び出し側でユーザーが「固定」を外した場合は
+ * 保存後に updateMemory で pinned: false に変更すること)。
+ */
+export async function createManualMemory(
+  roomId: string,
+  type: MemoryType,
+  subjectIds: string[],
+  content: string,
+): Promise<Memory> {
+  const memory: Memory = {
+    id: generateId(),
+    roomId,
+    type,
+    subjectIds,
+    content,
+    sourceMessageIds: [],
+    disabled: false,
+    pinned: true,
+    createdAt: Date.now(),
+  };
+  await db.memories.add(memory);
+  return memory;
+}
+
 /** 記憶を更新する(内容編集・固定トグル・有効/無効切替) */
 export async function updateMemory(
   id: string,

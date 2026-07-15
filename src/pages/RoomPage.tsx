@@ -639,6 +639,7 @@ export function RoomPage() {
       <SidePanel
         open={sidePanelOpen}
         onClose={() => setSidePanelOpen(false)}
+        roomId={room.id}
         members={members}
         memories={memories}
         hasMessages={messages.length > 0}
