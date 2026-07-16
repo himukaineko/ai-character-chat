@@ -30,7 +30,24 @@ export async function updateCharacter(
   id: string,
   patch: Partial<CharacterInput>,
 ): Promise<void> {
-  await db.characters.update(id, { ...patch, updatedAt: Date.now() });
+  await db.transaction("rw", [db.characters, db.messages], async () => {
+    const current = await db.characters.get(id);
+    await db.characters.update(id, { ...patch, updatedAt: Date.now() });
+
+    // 名前変更を検知したら、過去の発言(Message.speaker)も新しい名前に追従させる。
+    // speakerは発言時点のキャラ名を文字列でそのまま保持しているため、これをしないと
+    // 名前変更後にチャット履歴のアイコンが解決できなくなる(表示が「?」になる)。
+    // 既に壊れている過去データの救済は対象外(今後の変更にのみ追従させる)。
+    const oldName = current?.name.trim();
+    const newName = patch.name?.trim();
+    if (oldName && newName && oldName !== newName) {
+      // type/speakerはインデックスされていないため全件スキャンになるが、
+      // 個人利用規模のログ件数であれば実用上問題にならない。
+      await db.messages
+        .filter((m) => m.type === "dialogue" && m.speaker === oldName)
+        .modify({ speaker: newName });
+    }
+  });
 }
 
 /** 記憶の昇格先(仕様書3.4: 好きなもの / 背景 / 自由記述欄) */
