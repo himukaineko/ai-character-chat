@@ -67,16 +67,24 @@ export function ChatMessageItem({ message, character, onRewind, onDelete }: Chat
     setMenuOpen(false);
   };
 
+  /**
+   * 操作メニューの開閉トグル。
+   * ⋯ボタンだけでなく、トピック行のラベルなど「大きなタップ対象」からも
+   * 同じメニューを開けるように共通化する(トピック行の⋯は小さく気づかれにくく、
+   * 「ここまで戻るがトピックには効かない」と誤解される実例があったため)。
+   */
+  const toggleMenu = (e: { currentTarget: HTMLElement }) => {
+    if (!menuOpen) {
+      setMenuStyle(calcDropdownStyle(e.currentTarget, { menuWidth: 144, direction: "down" }));
+    }
+    setMenuOpen((v) => !v);
+  };
+
   const ActionMenuButton = (
     <div className="relative shrink-0 self-start">
       <button
         type="button"
-        onClick={(e) => {
-          if (!menuOpen) {
-            setMenuStyle(calcDropdownStyle(e.currentTarget, { menuWidth: 144, direction: "down" }));
-          }
-          setMenuOpen((v) => !v);
-        }}
+        onClick={toggleMenu}
         // モバイルでのタップ領域確保(仕様外の見た目肥大を避けるため、視覚上のサイズは
         // 変えずflexで中央寄せし、実際のヒット領域を44px近くまで広げる)
         className="flex h-11 w-11 items-center justify-center rounded-full text-xs text-[var(--chat-muted-text)] opacity-60 hover:bg-[var(--chat-input-bg,#27272a)] hover:text-[var(--chat-heading-text,#f4f4f5)] hover:opacity-100"
@@ -139,7 +147,16 @@ export function ChatMessageItem({ message, character, onRewind, onDelete }: Chat
     return (
       <div className="animate-message-in group my-3 flex items-center justify-center gap-2">
         <div className="h-px flex-1 bg-[var(--chat-topic-line)]" />
-        <span className="shrink-0 text-xs text-[var(--chat-topic-text)]">場面: {message.text}</span>
+        {/* 発見性の改善: 右端の小さな⋯は気づかれにくいため、ラベル自体のタップでも
+            同じ操作メニュー(ここまで戻る/コピー/削除)を開けるようにする */}
+        <button
+          type="button"
+          onClick={toggleMenu}
+          title="タップで操作メニュー(ここまで戻る・コピー・削除)"
+          className="shrink-0 rounded-md px-1.5 py-1 text-xs text-[var(--chat-topic-text)] hover:bg-[var(--chat-input-bg,#27272a)]"
+        >
+          場面: {message.text}
+        </button>
         <div className="h-px flex-1 bg-[var(--chat-topic-line)]" />
         {ActionMenuButton}
       </div>
