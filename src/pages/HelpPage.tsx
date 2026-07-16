@@ -11,6 +11,8 @@ import {
   ThemeIcon,
   TrashIcon,
 } from "../components/room/RoomBarIcons";
+// 作者への応援・SNS誘導セクション用(機能追加)
+import { SUPPORT_LINKS } from "../components/SupportLinks";
 
 // ボタン名・画面名を目立たせるためのバッジ風インライン表示
 function Tag({ children }: { children: ReactNode }) {
@@ -339,6 +341,38 @@ export function HelpPage() {
             </NoteBox>
           </div>
         </AccordionSection>
+
+        {/* 作者への応援・SNS誘導(機能追加): 折りたたみにせず常時表示。利用上の注意の手前に配置 */}
+        <section className="mt-3 rounded-lg border border-zinc-800 bg-zinc-900 p-4">
+          <h2 className="text-base font-semibold text-zinc-100">作者を応援する</h2>
+          <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+            このアプリは個人が趣味で開発しています。楽しんでもらえたら、応援してもらえると嬉しいです。
+          </p>
+          <div className="mt-4 flex flex-col gap-2">
+            {SUPPORT_LINKS.map((link) => {
+              const Icon = link.icon;
+              return (
+                <a
+                  key={link.key}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 rounded-md border border-zinc-800 bg-zinc-800/40 px-3 py-2.5 transition-colors hover:border-indigo-600/60 hover:bg-zinc-800"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-zinc-700 text-zinc-300">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-zinc-100">{link.name}</span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-zinc-400">
+                      {link.description}
+                    </span>
+                  </span>
+                </a>
+              );
+            })}
+          </div>
+        </section>
 
         <AccordionSection title="⚠ 利用上の注意">
           <div className="-mx-4 -mt-4 mb-3 rounded-t-lg border-b border-amber-800/40 bg-amber-950/20 px-4 py-2">

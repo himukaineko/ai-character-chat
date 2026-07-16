@@ -10,6 +10,8 @@ import { loadLastRoomId, loadUserProfile } from "../lib/settings";
 import { useBlobUrl } from "../lib/useBlobUrl";
 import type { Character, Message, Room, World } from "../types";
 import { resolveCoverFocalPoint } from "../types";
+// 作者への応援・SNS誘導(機能追加): ページ最下部のさりげないリンク行用
+import { SUPPORT_LINKS } from "../components/SupportLinks";
 
 function formatUpdatedAt(timestamp: number): string {
   const date = new Date(timestamp);
@@ -332,6 +334,24 @@ export function HomePage() {
           ))}
         </div>
       )}
+
+      {/* 作者への応援・SNS誘導(機能追加): ルーム0件でも表示する控えめなリンク行 */}
+      <p className="mt-12 pb-2 text-center text-xs text-zinc-500">
+        作った人:{" "}
+        {SUPPORT_LINKS.map((link, i) => (
+          <span key={link.key}>
+            {i > 0 && " / "}
+            <a
+              href={link.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-zinc-500 hover:text-indigo-400 hover:underline"
+            >
+              {link.key === "kofi" ? "☕ Ko-fi" : link.name}
+            </a>
+          </span>
+        ))}
+      </p>
 
       <RoomFormModal
         open={formOpen}
