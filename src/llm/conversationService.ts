@@ -6,6 +6,7 @@ import { db } from "../db";
 import type { Message, Room, UserProfile, World } from "../types";
 import { loadAppSettings, loadUserProfile } from "../lib/settings";
 import {
+  addEditedMessage,
   addTopicMessage,
   addUserMessage,
   deleteBatch,
@@ -244,6 +245,24 @@ export async function submitUserMessage(
 /** 「次の会話を生成」ボタン(観察モード、仕様書5.1) */
 export async function generateNextBatch(roomId: string): Promise<GenerateResult> {
   return generateBatch(roomId, { kind: "continue" });
+}
+
+/**
+ * メッセージ編集機能: 編集されたキャラのセリフ・地の文を元の話者のまま再投稿し、
+ * そこから会話の続きを生成する。生成に失敗しても編集後の発言自体は残る
+ * (submitUserMessageと同じ方針。エラーは呼び出し側でキャッチして表示する)。
+ */
+export async function submitEditedMessage(
+  roomId: string,
+  speaker: string,
+  type: "dialogue" | "narration",
+  text: string,
+): Promise<{ editedMessage: Message; batch: GenerateResult }> {
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error("発言が空です");
+  const editedMessage = await addEditedMessage(roomId, speaker, type, trimmed);
+  const batch = await generateBatch(roomId, { kind: "continue" });
+  return { editedMessage, batch };
 }
 
 /** 直前の生成を取り消す(仕様書7.1): 同一batchIdのメッセージをまとめて削除する */

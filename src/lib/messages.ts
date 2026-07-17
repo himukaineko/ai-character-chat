@@ -98,6 +98,31 @@ export async function addUserMessage(roomId: string, text: string): Promise<Mess
 }
 
 /**
+ * メッセージ編集機能: 編集されたキャラのセリフ・地の文を、元の話者・種別のまま再投稿する。
+ * 編集フローでは対象メッセージを「ここまで戻る」で削除してから、編集後のテキストで
+ * このメッセージを新規に積み直す(編集後の会話はここから再生成される)。
+ */
+export async function addEditedMessage(
+  roomId: string,
+  speaker: string,
+  type: "dialogue" | "narration",
+  text: string,
+): Promise<Message> {
+  const message: Message = {
+    id: generateId(),
+    roomId,
+    batchId: generateId(),
+    speaker: type === "narration" ? "narration" : speaker,
+    type,
+    text: text.trim(),
+    createdAt: Date.now(),
+  };
+  await db.messages.add(message);
+  await touchRoom(roomId);
+  return message;
+}
+
+/**
  * AI生成結果をまとめて1つのbatchIdでDB保存する(仕様書9.5 / 13章「トランザクションで書き込む」)。
  * 途中で失敗した場合は何も残らない。
  */

@@ -49,6 +49,7 @@ import {
 import {
   generateNextBatch,
   regenerateLastBatch,
+  submitEditedMessage,
   submitTopic,
   submitUserMessage,
   undoLastBatch,
@@ -85,6 +86,12 @@ export function RoomPage() {
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
   // メッセージ編集機能: 「編集」確定後、巻き戻した元テキストを入力欄に1回だけ流し込む指示
   const [inputPrefill, setInputPrefill] = useState<{ text: string; mode: InputMode } | null>(null);
+  // キャラのセリフ・地の文の編集中は元の話者を保持し、送信時にユーザー発言ではなく
+  // その話者の発言として再投稿する(そこから会話の続きを生成する)
+  const [editContext, setEditContext] = useState<{
+    speaker: string;
+    type: "dialogue" | "narration";
+  } | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
@@ -373,12 +380,26 @@ export function RoomPage() {
     if (!editTarget) return;
     // 「ここまで戻る」と同じくeditTarget自身も含めて以降を削除したうえで、
     // 削除前のテキストを入力欄に流し込み、そのまま書き直して送信し直せるようにする。
+    // キャラのセリフ・地の文の場合は元の話者を保持し、送信時にその話者として
+    // 再投稿する(ユーザー発言に化けないようにする)。
     const mode: InputMode = editTarget.type === "topic" ? "topic" : "message";
     const text = editTarget.text;
+    if (editTarget.type === "dialogue" || editTarget.type === "narration") {
+      setEditContext({ speaker: editTarget.speaker, type: editTarget.type });
+    } else {
+      setEditContext(null);
+    }
     await rewindTo(room.id, editTarget.id);
     setEditTarget(null);
     setInputPrefill({ text, mode });
     await reload();
+  };
+
+  const handleSubmitEdit = (text: string) => {
+    if (!editContext) return;
+    const ctx = editContext;
+    setEditContext(null);
+    void runGeneration(() => submitEditedMessage(room.id, ctx.speaker, ctx.type, text));
   };
 
   const handleDeleteConfirm = async () => {
@@ -645,6 +666,13 @@ export function RoomPage() {
         onUndo={handleUndo}
         prefill={inputPrefill}
         onPrefillConsumed={() => setInputPrefill(null)}
+        editing={
+          editContext
+            ? { label: editContext.type === "narration" ? "地の文" : editContext.speaker }
+            : null
+        }
+        onSubmitEdit={handleSubmitEdit}
+        onCancelEdit={() => setEditContext(null)}
       />
 
       <StillPromptModal

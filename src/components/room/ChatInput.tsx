@@ -35,6 +35,14 @@ interface ChatInputProps {
    */
   prefill: { text: string; mode: InputMode } | null;
   onPrefillConsumed: () => void;
+  /**
+   * キャラのセリフ・地の文の編集中は、送信をユーザー発言ではなく
+   * 「元の話者の発言の再投稿+続きの生成」に切り替える。nullなら通常送信。
+   * labelは編集中バナーの表示名(キャラ名または「地の文」)。
+   */
+  editing: { label: string } | null;
+  onSubmitEdit: (text: string) => void;
+  onCancelEdit: () => void;
 }
 
 export function ChatInput({
@@ -51,6 +59,9 @@ export function ChatInput({
   onUndo,
   prefill,
   onPrefillConsumed,
+  editing,
+  onSubmitEdit,
+  onCancelEdit,
 }: ChatInputProps) {
   const [mode, setMode] = useState<InputMode>("message");
   const [draft, setDraft] = useState("");
@@ -82,7 +93,10 @@ export function ChatInput({
     e.preventDefault();
     const text = draft.trim();
     if (!text || busy) return;
-    if (mode === "topic") {
+    if (editing) {
+      // キャラのセリフ・地の文の編集中: ユーザー発言ではなく元の話者として再投稿する
+      onSubmitEdit(text);
+    } else if (mode === "topic") {
       onSubmitTopic(text);
     } else {
       onSubmitMessage(text);
@@ -265,6 +279,25 @@ export function ChatInput({
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* メッセージ編集機能: キャラのセリフ・地の文の編集中であることを明示するバナー。
+          ×で解除すると通常のユーザー発言としての送信に戻る(入力中のテキストは残す)。 */}
+      {editing && (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-md border border-indigo-500/50 bg-indigo-500/10 px-3 py-1.5 text-xs text-[var(--chat-accent-text)]">
+          <span>
+            「{editing.label}」の発言を編集中 — 送信すると元の話者の発言として置き換わり、続きが生成されます
+          </span>
+          <button
+            type="button"
+            onClick={onCancelEdit}
+            aria-label="編集をやめる(通常の発言として送信する)"
+            title="編集をやめる(通常の発言として送信する)"
+            className="shrink-0 rounded px-1.5 py-0.5 text-sm hover:bg-indigo-500/20"
+          >
+            ×
+          </button>
         </div>
       )}
 
