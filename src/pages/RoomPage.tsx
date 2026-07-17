@@ -9,7 +9,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog";
 import { MemberBar } from "../components/room/MemberBar";
 import { ChatMessageItem } from "../components/room/ChatMessageItem";
 import { TypingIndicator } from "../components/room/TypingIndicator";
-import { ChatInput } from "../components/room/ChatInput";
+import { ChatInput, type InputMode } from "../components/room/ChatInput";
 import { AUTO_GENERATE_MAX_COUNT } from "../lib/autoGenerate";
 import { SidePanel } from "../components/room/SidePanel";
 import { LogManageMenu } from "../components/room/LogManageMenu";
@@ -81,7 +81,10 @@ export function RoomPage() {
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const [stillPromptOpen, setStillPromptOpen] = useState(false);
   const [rewindTarget, setRewindTarget] = useState<Message | null>(null);
+  const [editTarget, setEditTarget] = useState<Message | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
+  // メッセージ編集機能: 「編集」確定後、巻き戻した元テキストを入力欄に1回だけ流し込む指示
+  const [inputPrefill, setInputPrefill] = useState<{ text: string; mode: InputMode } | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
@@ -366,6 +369,18 @@ export function RoomPage() {
     await reload();
   };
 
+  const handleEditConfirm = async () => {
+    if (!editTarget) return;
+    // 「ここまで戻る」と同じくeditTarget自身も含めて以降を削除したうえで、
+    // 削除前のテキストを入力欄に流し込み、そのまま書き直して送信し直せるようにする。
+    const mode: InputMode = editTarget.type === "topic" ? "topic" : "message";
+    const text = editTarget.text;
+    await rewindTo(room.id, editTarget.id);
+    setEditTarget(null);
+    setInputPrefill({ text, mode });
+    await reload();
+  };
+
   const handleDeleteConfirm = async () => {
     if (!deleteTarget) return;
     await deleteSingleMessage(room.id, deleteTarget.id);
@@ -591,6 +606,7 @@ export function RoomPage() {
             message={m}
             character={charactersByName.get(m.speaker)}
             onRewind={(messageId) => setRewindTarget(messages.find((mm) => mm.id === messageId) ?? null)}
+            onEdit={(messageId) => setEditTarget(messages.find((mm) => mm.id === messageId) ?? null)}
             onDelete={(messageId) => setDeleteTarget(messages.find((mm) => mm.id === messageId) ?? null)}
           />
         ))}
@@ -627,6 +643,8 @@ export function RoomPage() {
         onStopAutoGenerate={handleStopAutoGenerate}
         onRegenerate={handleRegenerate}
         onUndo={handleUndo}
+        prefill={inputPrefill}
+        onPrefillConsumed={() => setInputPrefill(null)}
       />
 
       <StillPromptModal
@@ -696,6 +714,15 @@ export function RoomPage() {
         confirmLabel="ここまで戻る"
         onCancel={() => setRewindTarget(null)}
         onConfirm={handleRewindConfirm}
+      />
+
+      <ConfirmDialog
+        open={editTarget !== null}
+        title="この発言を編集しますか?"
+        message="選択した発言以降のメッセージをすべて削除し、元の内容を入力欄にコピーします。関連する記憶は無効化され、かかる要約は削除されます。この操作は取り消せません。"
+        confirmLabel="編集する"
+        onCancel={() => setEditTarget(null)}
+        onConfirm={handleEditConfirm}
       />
 
       <ConfirmDialog

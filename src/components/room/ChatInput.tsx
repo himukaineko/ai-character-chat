@@ -28,6 +28,13 @@ interface ChatInputProps {
   onStopAutoGenerate: () => void;
   onRegenerate: (options: RegenerateOption[]) => void;
   onUndo: () => void;
+  /**
+   * メッセージ編集機能(機能追加): 「編集」で巻き戻したメッセージの元テキストを
+   * 入力欄に流し込むための指示。参照が変わるたびに1回だけ反映し、消費後は
+   * onPrefillConsumed で親側の状態をnullに戻してもらう(再レンダーでの再流し込みを防ぐため)。
+   */
+  prefill: { text: string; mode: InputMode } | null;
+  onPrefillConsumed: () => void;
 }
 
 export function ChatInput({
@@ -42,6 +49,8 @@ export function ChatInput({
   onStopAutoGenerate,
   onRegenerate,
   onUndo,
+  prefill,
+  onPrefillConsumed,
 }: ChatInputProps) {
   const [mode, setMode] = useState<InputMode>("message");
   const [draft, setDraft] = useState("");
@@ -58,6 +67,16 @@ export function ChatInput({
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, [draft]);
+
+  // メッセージ編集機能: 親から編集対象のテキストが渡されたら、入力欄に流し込んで
+  // 続きを打てるようにフォーカスする。1回きりの反映のため消費後は親に通知する。
+  useEffect(() => {
+    if (!prefill) return;
+    setMode(prefill.mode);
+    setDraft(prefill.text);
+    textareaRef.current?.focus();
+    onPrefillConsumed();
+  }, [prefill, onPrefillConsumed]);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();

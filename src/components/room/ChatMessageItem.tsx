@@ -16,6 +16,7 @@ interface ChatMessageItemProps {
   message: Message;
   character: Character | undefined;
   onRewind: (messageId: string) => void;
+  onEdit: (messageId: string) => void;
   onDelete: (messageId: string) => void;
 }
 
@@ -50,7 +51,13 @@ function SegmentBlocks({
   );
 }
 
-export function ChatMessageItem({ message, character, onRewind, onDelete }: ChatMessageItemProps) {
+export function ChatMessageItem({
+  message,
+  character,
+  onRewind,
+  onEdit,
+  onDelete,
+}: ChatMessageItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   // はみ出し修正(モバイル対応): メニューはfixed配置+画面内クランプで表示する
   // (短い発言の「⋯」ボタンは画面左寄りに来るため、右端揃えのままだと左に切れることがある)。
@@ -118,6 +125,16 @@ export function ChatMessageItem({ message, character, onRewind, onDelete }: Chat
                 className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
               >
                 ここまで戻る
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onEdit(message.id);
+                }}
+                className="block w-full rounded-md px-2 py-1.5 text-left text-[var(--chat-button-text,#d4d4d8)] hover:bg-[var(--chat-input-bg,#27272a)]"
+              >
+                編集
               </button>
               <button
                 type="button"
