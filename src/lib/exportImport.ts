@@ -11,6 +11,7 @@ import type {
   Summary,
   UserProfile,
   World,
+  GameStatChange,
 } from "../types";
 import { defaultUserProfile, loadUserProfile, saveUserProfile } from "./settings";
 
@@ -47,6 +48,12 @@ export interface ExportData {
    * 読み込み側は必ず undefined → 空配列として扱うこと。
    */
   worlds?: World[];
+  /**
+   * ゲームモードのステータス変動ログ(機能追加)。
+   * 旧形式ファイル(このフィールドを持たない)のインポートも壊れないよう、
+   * 読み込み側は必ず undefined → 空配列として扱うこと。
+   */
+  gameStatChanges?: GameStatChange[];
   // 注意: apiKey等のAppSettingsはここに含めない
 }
 
@@ -76,6 +83,41 @@ export interface WorldExportData {
   exportedAt: number;
   world: World;
   characters: ExportedCharacter[];
+}
+
+/**
+ * ルームエクスポートに埋め込むワールド情報。
+ * スタンドアロンのWorldExportDataから format/version(ファイル種別マーカー)を除いた中身で、
+ * ワールド本体+所属キャラを1セットにまとめる。buildWorldExportDataと同様にユーザー個人の
+ * ペルソナ情報はサニタイズする(useCustomUserProfile=false、userProfileは空のデフォルト値)。
+ */
+export interface EmbeddedWorld {
+  world: World;
+  characters: ExportedCharacter[];
+}
+
+/**
+ * ルーム単位エクスポートファイルの形式。
+ * ルーム設定(ゲームモード含む)・参加キャラ・紐づくワールド(あれば)・記憶を常に含み、
+ * includesLog=trueのときのみ会話ログ・要約・ゲーム進行の変動ログも含める。
+ * 「設定のみ」(includesLog=false)は共有向け(会話内容を渡さない)、
+ * 「ログ込み」(includesLog=true)は続きから遊べる用途を想定する。
+ * ユーザープロフィールは含めない(ワールドと同様、共有相手に個人のペルソナ情報を渡さないため)。
+ * formatマーカーで他形式と区別する。
+ */
+export interface RoomExportData {
+  format: "room";
+  version: 1;
+  exportedAt: number;
+  includesLog: boolean;
+  room: ExportedRoom;
+  roomCharacterStates: RoomCharacterState[];
+  characters: ExportedCharacter[];
+  world?: EmbeddedWorld;
+  memories: Memory[];
+  messages?: Message[];
+  summaries?: Summary[];
+  gameStatChanges?: GameStatChange[];
 }
 
 /** BlobをBase64のdata URLに変換する */
@@ -157,7 +199,7 @@ function downloadJson(data: unknown, filename: string): void {
 
 /** 全データをエクスポート用オブジェクトに組み立てる */
 export async function buildExportData(): Promise<ExportData> {
-  const [characters, rooms, roomCharacterStates, messages, memories, summaries, worlds] =
+  const [characters, rooms, roomCharacterStates, messages, memories, summaries, worlds, gameStatChanges] =
     await Promise.all([
       db.characters.toArray(),
       db.rooms.toArray(),
@@ -166,6 +208,7 @@ export async function buildExportData(): Promise<ExportData> {
       db.memories.toArray(),
       db.summaries.toArray(),
       db.worlds.toArray(),
+      db.gameStatChanges.toArray(),
     ]);
 
   const exportedCharacters = await serializeCharacters(characters);
@@ -183,6 +226,7 @@ export async function buildExportData(): Promise<ExportData> {
     summaries,
     userProfile: loadUserProfile(),
     worlds,
+    gameStatChanges,
   };
 }
 
@@ -273,15 +317,92 @@ export async function exportWorldToFile(worldId: string): Promise<void> {
   downloadJson(data, `world_${name}_${dateStr}.json`);
 }
 
+/**
+ * ルーム単体エクスポート用オブジェクトを組み立てる。
+ * includeLog=falseの場合は会話ログ(messages/summaries/gameStatChanges)を含めない
+ * (共有向け。記憶はルームの前提知識として有用なため、ログの有無にかかわらず常に含める)。
+ * 紐づくワールドがあれば、buildWorldExportDataと同様にユーザープロフィールをサニタイズして埋め込む。
+ */
+export async function buildRoomExportData(
+  roomId: string,
+  includeLog: boolean,
+): Promise<RoomExportData> {
+  const room = await db.rooms.get(roomId);
+  if (!room) {
+    throw new Error("ルームが見つかりません");
+  }
+
+  const [allCharacters, roomCharacterStates, memories] = await Promise.all([
+    db.characters.toArray(),
+    db.roomCharacterStates.where("roomId").equals(roomId).toArray(),
+    db.memories.where("roomId").equals(roomId).toArray(),
+  ]);
+
+  const memberCharacters = allCharacters.filter((c) => room.memberIds.includes(c.id));
+
+  let world: EmbeddedWorld | undefined;
+  if (room.worldId) {
+    const w = await db.worlds.get(room.worldId);
+    if (w) {
+      const worldCharacters = allCharacters.filter((c) => w.characterIds.includes(c.id));
+      world = {
+        // 共有相手にユーザー個人のペルソナ情報を渡さないため、ワールド専用ユーザー設定は書き出さない
+        world: { ...w, useCustomUserProfile: false, userProfile: defaultUserProfile() },
+        characters: await serializeCharacters(worldCharacters),
+      };
+    }
+  }
+
+  const [serializedRoom] = await serializeRooms([room]);
+
+  const data: RoomExportData = {
+    format: "room",
+    version: 1,
+    exportedAt: Date.now(),
+    includesLog: includeLog,
+    room: serializedRoom,
+    roomCharacterStates,
+    characters: await serializeCharacters(memberCharacters),
+    world,
+    memories,
+  };
+
+  if (includeLog) {
+    const [messages, summaries, gameStatChanges] = await Promise.all([
+      db.messages.where("roomId").equals(roomId).toArray(),
+      db.summaries.where("roomId").equals(roomId).toArray(),
+      db.gameStatChanges.where("roomId").equals(roomId).toArray(),
+    ]);
+    data.messages = messages;
+    data.summaries = summaries;
+    data.gameStatChanges = gameStatChanges;
+  }
+
+  return data;
+}
+
+/**
+ * ルームをJSONファイルとしてダウンロードさせる(ファイル名にルーム名を含める)。
+ * includeLog=trueなら「ログ込み(続きから遊べる)」、falseなら「設定のみ(共有向け)」。
+ */
+export async function exportRoomToFile(roomId: string, includeLog: boolean): Promise<void> {
+  const data = await buildRoomExportData(roomId, includeLog);
+  const dateStr = dateOnly(data.exportedAt);
+  const name = sanitizeForFilename(data.room.name || "ルーム");
+  downloadJson(data, `room_${name}_${dateStr}.json`);
+}
+
 /** インポートファイルをパースした結果(形式マーカーで判別する) */
 export type ParsedImportFile =
   | { kind: "full"; data: ExportData }
   | { kind: "charactersOnly"; data: CharactersOnlyExportData }
-  | { kind: "world"; data: WorldExportData };
+  | { kind: "world"; data: WorldExportData }
+  | { kind: "room"; data: RoomExportData };
 
 /**
- * JSON文字列をパースし、全データ形式/キャラのみ形式/ワールド形式のいずれかを判別して返す(最低限の形チェック)。
- * キャラのみ形式は format: "characters-only"、ワールド形式は format: "world" マーカーで判別する。
+ * JSON文字列をパースし、全データ形式/キャラのみ形式/ワールド形式/ルーム形式のいずれかを
+ * 判別して返す(最低限の形チェック)。キャラのみ形式は format: "characters-only"、
+ * ワールド形式は format: "world"、ルーム形式は format: "room" マーカーで判別する。
  */
 export function parseImportFile(json: string): ParsedImportFile {
   const parsed = JSON.parse(json) as Record<string, unknown>;
@@ -301,6 +422,13 @@ export function parseImportFile(json: string): ParsedImportFile {
       throw new Error("バックアップファイルの形式が正しくありません");
     }
     return { kind: "world", data: parsed as unknown as WorldExportData };
+  }
+
+  if (parsed.format === "room") {
+    if (!parsed.room || typeof parsed.room !== "object" || !Array.isArray(parsed.characters)) {
+      throw new Error("バックアップファイルの形式が正しくありません");
+    }
+    return { kind: "room", data: parsed as unknown as RoomExportData };
   }
 
   if (!Array.isArray(parsed.characters) || !Array.isArray(parsed.rooms)) {
@@ -337,6 +465,8 @@ export async function importFromData(data: ExportData, mode: ImportMode): Promis
 
   // 旧形式ファイル(worldsフィールドなし)にも対応する: undefined → 空配列として扱う
   const importedWorlds = data.worlds ?? [];
+  // 旧形式ファイル(gameStatChangesフィールドなし)にも対応する: undefined → 空配列として扱う
+  const importedGameStatChanges = data.gameStatChanges ?? [];
 
   await db.transaction(
     "rw",
@@ -348,6 +478,7 @@ export async function importFromData(data: ExportData, mode: ImportMode): Promis
       db.memories,
       db.summaries,
       db.worlds,
+      db.gameStatChanges,
     ],
     async () => {
       if (mode === "replace") {
@@ -359,6 +490,7 @@ export async function importFromData(data: ExportData, mode: ImportMode): Promis
           db.memories.clear(),
           db.summaries.clear(),
           db.worlds.clear(),
+          db.gameStatChanges.clear(),
         ]);
         await db.characters.bulkAdd(characters);
         await db.rooms.bulkAdd(rooms);
@@ -367,6 +499,9 @@ export async function importFromData(data: ExportData, mode: ImportMode): Promis
         await db.memories.bulkAdd(data.memories);
         await db.summaries.bulkAdd(data.summaries);
         if (importedWorlds.length > 0) await db.worlds.bulkAdd(importedWorlds);
+        if (importedGameStatChanges.length > 0) {
+          await db.gameStatChanges.bulkAdd(importedGameStatChanges);
+        }
       } else {
         // merge: IDの衝突を避けるため、キャラ・ルームのIDを振り直し、関連レコードのIDも付け替える
         const characterIdMap = new Map<string, string>();
@@ -440,6 +575,17 @@ export async function importFromData(data: ExportData, mode: ImportMode): Promis
             messageIdMap.get(s.coversUpToMessageId) ?? s.coversUpToMessageId,
         }));
 
+        // 変動ログ: roomId/characterIdは付け替え後のIDに追従させる。
+        // statIdはRoom.gameMode内のGameStatDefを参照しており、gameModeはRoomオブジェクトの
+        // 一部としてそのまま運ばれるため再マッピング不要。batchIdはメッセージ側と同様、
+        // 付け替えずそのまま(グルーピング用の値であり、新しいroomIdの下で完結するため)。
+        const remappedGameStatChanges = importedGameStatChanges.map((c) => ({
+          ...c,
+          id: generateId(),
+          roomId: roomIdMap.get(c.roomId) ?? c.roomId,
+          characterId: characterIdMap.get(c.characterId) ?? c.characterId,
+        }));
+
         await db.characters.bulkAdd(remappedCharacters);
         await db.rooms.bulkAdd(remappedRooms);
         await db.roomCharacterStates.bulkAdd(remappedStates);
@@ -447,6 +593,9 @@ export async function importFromData(data: ExportData, mode: ImportMode): Promis
         await db.memories.bulkAdd(remappedMemories);
         await db.summaries.bulkAdd(remappedSummaries);
         if (remappedWorlds.length > 0) await db.worlds.bulkAdd(remappedWorlds);
+        if (remappedGameStatChanges.length > 0) {
+          await db.gameStatChanges.bulkAdd(remappedGameStatChanges);
+        }
       }
     },
   );
@@ -553,4 +702,165 @@ export async function importWorld(
   });
 
   return { worldName: world.name, characterCount: characters.length };
+}
+
+/**
+ * ルーム単体のバックアップを取り込む。常に「追加」として動作する(置き換えは行わない。既存データは消さない)。
+ * ルーム・メッセージ・記憶・要約・参加状態・変動ログはすべて新しいIDを採番して追加し、
+ * 参照(roomId、メッセージID→記憶のsourceMessageIds、gameStatChangesのcharacterId等)を
+ * 一貫して張り替える。
+ * キャラの重複扱いはimportWorldと同じ方針(既存キャラとIDが衝突しなければ元IDを維持したまま追加、
+ * 衝突する場合のみ新しいIDを振り直す。いずれの場合も必ず新規レコードとして追加される)。
+ * ルーム参加キャラと埋め込みワールド所属キャラで元IDが重複する場合は1体として扱う(二重追加防止)。
+ * ワールドが含まれていればimportWorldと同じ方針で取り込み、新ルームのworldIdをその新IDに差し替える。
+ * 含まれていなければworldIdはundefinedにする。
+ * すべてトランザクションで実行し、途中失敗で中途半端なデータが残らないようにする。
+ * 戻り値はルーム名・追加したキャラ数・ログを含んだかどうか。
+ */
+export async function importRoom(
+  data: RoomExportData,
+): Promise<{ roomName: string; characterCount: number; hasLog: boolean }> {
+  const now = Date.now();
+
+  // ルーム参加キャラ・埋め込みワールド所属キャラをまとめ、元IDで重複排除する
+  // (同じキャラがルームメンバーかつワールド所属の場合、二重に追加しないため)
+  const charSourceMap = new Map<string, ExportedCharacter>();
+  for (const c of data.characters) charSourceMap.set(c.id, c);
+  if (data.world) {
+    for (const c of data.world.characters) {
+      if (!charSourceMap.has(c.id)) charSourceMap.set(c.id, c);
+    }
+  }
+
+  // キャラ取り込み: importWorldと同じ方針(既存IDと衝突しなければ元IDを維持、衝突すれば振り直す)
+  const existingCharacterIds = new Set((await db.characters.toArray()).map((c) => c.id));
+  const characterIdMap = new Map<string, string>();
+  const characters: Character[] = await Promise.all(
+    Array.from(charSourceMap.values()).map(async (c) => {
+      const { iconImage, portraitImage, galleryImages, ...rest } = c;
+      const newId = existingCharacterIds.has(rest.id) ? generateId() : rest.id;
+      existingCharacterIds.add(newId);
+      characterIdMap.set(rest.id, newId);
+      return {
+        ...rest,
+        id: newId,
+        createdAt: now,
+        updatedAt: now,
+        iconImage: iconImage ? await dataUrlToBlob(iconImage) : undefined,
+        portraitImage: portraitImage ? await dataUrlToBlob(portraitImage) : undefined,
+        galleryImages:
+          galleryImages && galleryImages.length > 0
+            ? await Promise.all(galleryImages.map((s) => dataUrlToBlob(s)))
+            : undefined,
+      } as Character;
+    }),
+  );
+
+  // ワールド取り込み(あれば): importWorldと同じ方針でID振り直し、キャラID付け替えに追従させる
+  let world: World | undefined;
+  if (data.world) {
+    const existingWorldIds = new Set((await db.worlds.toArray()).map((w) => w.id));
+    const w = data.world.world;
+    const newWorldId = existingWorldIds.has(w.id) ? generateId() : w.id;
+    world = {
+      ...w,
+      id: newWorldId,
+      characterIds: w.characterIds.map((cid) => characterIdMap.get(cid) ?? cid),
+      relations: w.relations.map((r) => ({
+        ...r,
+        characterIdA: characterIdMap.get(r.characterIdA) ?? r.characterIdA,
+        characterIdB: characterIdMap.get(r.characterIdB) ?? r.characterIdB,
+      })),
+      // 念のため、取り込んだファイルにユーザープロフィールが含まれていても無視する
+      useCustomUserProfile: false,
+      userProfile: defaultUserProfile(),
+      createdAt: now,
+      updatedAt: now,
+    };
+  }
+
+  // ルーム本体: 表紙イラストをBlobに復元し、新しいIDを採番。worldIdは取り込んだワールドの新IDに差し替える
+  // (ワールドが含まれない場合はundefined)。gameMode(ステータス定義・展開ルール)はRoomの一部として
+  // そのまま運ばれる(statIdの再マッピングは不要)。
+  const { coverImage, ...roomRest } = data.room;
+  const newRoomId = generateId();
+  const room: Room = {
+    ...roomRest,
+    id: newRoomId,
+    memberIds: roomRest.memberIds.map((mid) => characterIdMap.get(mid) ?? mid),
+    worldId: world ? world.id : undefined,
+    coverImage: coverImage ? await dataUrlToBlob(coverImage) : undefined,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  // 参加状態(presence/overrides)
+  const roomCharacterStates: RoomCharacterState[] = data.roomCharacterStates.map((s) => ({
+    ...s,
+    roomId: newRoomId,
+    characterId: characterIdMap.get(s.characterId) ?? s.characterId,
+  }));
+
+  // ログ(あれば): メッセージIDを新規採番し、記憶・要約の参照を追従させる。
+  // batchIdは全体バックアップのmerge実装と同様、付け替えない(新しいroomIdの下で完結するグルーピング値のため)。
+  const messageIdMap = new Map<string, string>();
+  const messages: Message[] = (data.messages ?? []).map((m) => {
+    const newId = generateId();
+    messageIdMap.set(m.id, newId);
+    return { ...m, id: newId, roomId: newRoomId };
+  });
+
+  // 記憶: ログあり/なしどちらでも含める。sourceMessageIdsはmessageIdMapに無ければ
+  // (=ログを含まないインポート)元のIDのまま残す(既存メッセージと衝突しない孤立参照になるだけで実害はない)
+  const memories: Memory[] = data.memories.map((mem) => ({
+    ...mem,
+    id: generateId(),
+    roomId: newRoomId,
+    subjectIds: mem.subjectIds.map((sid) => characterIdMap.get(sid) ?? sid),
+    sourceMessageIds: mem.sourceMessageIds.map((mid) => messageIdMap.get(mid) ?? mid),
+  }));
+
+  const summaries: Summary[] = (data.summaries ?? []).map((s) => ({
+    ...s,
+    id: generateId(),
+    roomId: newRoomId,
+    presentCharacterIds: s.presentCharacterIds.map((cid) => characterIdMap.get(cid) ?? cid),
+    coversUpToMessageId: messageIdMap.get(s.coversUpToMessageId) ?? s.coversUpToMessageId,
+  }));
+
+  // 変動ログ: statIdはroom.gameMode内のGameStatDefをそのまま参照するため再マッピング不要
+  const gameStatChanges: GameStatChange[] = (data.gameStatChanges ?? []).map((c) => ({
+    ...c,
+    id: generateId(),
+    roomId: newRoomId,
+    characterId: characterIdMap.get(c.characterId) ?? c.characterId,
+  }));
+
+  await db.transaction(
+    "rw",
+    [
+      db.characters,
+      db.worlds,
+      db.rooms,
+      db.roomCharacterStates,
+      db.messages,
+      db.memories,
+      db.summaries,
+      db.gameStatChanges,
+    ],
+    async () => {
+      if (characters.length > 0) await db.characters.bulkAdd(characters);
+      if (world) await db.worlds.add(world);
+      await db.rooms.add(room);
+      if (roomCharacterStates.length > 0) {
+        await db.roomCharacterStates.bulkAdd(roomCharacterStates);
+      }
+      if (messages.length > 0) await db.messages.bulkAdd(messages);
+      if (memories.length > 0) await db.memories.bulkAdd(memories);
+      if (summaries.length > 0) await db.summaries.bulkAdd(summaries);
+      if (gameStatChanges.length > 0) await db.gameStatChanges.bulkAdd(gameStatChanges);
+    },
+  );
+
+  return { roomName: room.name, characterCount: characters.length, hasLog: messages.length > 0 };
 }

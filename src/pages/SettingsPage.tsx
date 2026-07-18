@@ -30,10 +30,12 @@ import {
   importFromData,
   importCharactersOnly,
   importWorld,
+  importRoom,
   parseImportFile,
   type ExportData,
   type CharactersOnlyExportData,
   type WorldExportData,
+  type RoomExportData,
 } from "../lib/exportImport";
 
 export function SettingsPage() {
@@ -56,10 +58,12 @@ export function SettingsPage() {
   const [pendingCharactersImport, setPendingCharactersImport] =
     useState<CharactersOnlyExportData | null>(null);
   const [pendingWorldImport, setPendingWorldImport] = useState<WorldExportData | null>(null);
+  const [pendingRoomImport, setPendingRoomImport] = useState<RoomExportData | null>(null);
   const [modeDialogOpen, setModeDialogOpen] = useState(false);
   const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
   const [charactersImportConfirmOpen, setCharactersImportConfirmOpen] = useState(false);
   const [worldImportConfirmOpen, setWorldImportConfirmOpen] = useState(false);
+  const [roomImportConfirmOpen, setRoomImportConfirmOpen] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importDone, setImportDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -118,6 +122,9 @@ export function SettingsPage() {
       } else if (parsed.kind === "world") {
         setPendingWorldImport(parsed.data);
         setWorldImportConfirmOpen(true);
+      } else if (parsed.kind === "room") {
+        setPendingRoomImport(parsed.data);
+        setRoomImportConfirmOpen(true);
       } else {
         setPendingImport(parsed.data);
         setModeDialogOpen(true);
@@ -174,6 +181,22 @@ export function SettingsPage() {
       setImporting(false);
       setPendingWorldImport(null);
       setWorldImportConfirmOpen(false);
+    }
+  };
+
+  const runRoomImport = async () => {
+    if (!pendingRoomImport) return;
+    setImporting(true);
+    try {
+      await importRoom(pendingRoomImport);
+      await loadAll();
+      setImportDone(true);
+    } catch {
+      setImportError("インポート中にエラーが発生しました。");
+    } finally {
+      setImporting(false);
+      setPendingRoomImport(null);
+      setRoomImportConfirmOpen(false);
     }
   };
 
@@ -568,6 +591,9 @@ export function SettingsPage() {
         <p className="mt-1 text-xs text-zinc-500">
           「キャラのみエクスポート」は、チャット内容やルームを含まず、キャラ設定だけを書き出します。キャラの共有に便利です。
         </p>
+        <p className="mt-1 text-xs text-zinc-500">
+          ルーム1つだけを共有・バックアップしたいときは、ルーム画面の「ログ管理」から「ルームをエクスポート」を使います。ここでのインポートも、そのファイルを読み込むと自動的に対応します。
+        </p>
         <div className="mt-4 flex flex-wrap gap-2">
           <button
             type="button"
@@ -700,6 +726,26 @@ export function SettingsPage() {
           setPendingWorldImport(null);
         }}
         onConfirm={runWorldImport}
+      />
+
+      {/* ルームインポートの確認ダイアログ(常に「追加」) */}
+      <ConfirmDialog
+        open={roomImportConfirmOpen}
+        title="ルームを追加しますか?"
+        message={`ルーム「${pendingRoomImport?.room.name ?? ""}」を追加します。参加キャラクター${
+          pendingRoomImport?.characters.length ?? 0
+        }体、${
+          pendingRoomImport?.includesLog
+            ? "会話ログ・記憶を含みます(続きから遊べます)。"
+            : "会話ログは含まれません(記憶のみ含みます)。"
+        }既存のデータはそのまま残ります。`}
+        confirmLabel="追加する"
+        danger={false}
+        onCancel={() => {
+          setRoomImportConfirmOpen(false);
+          setPendingRoomImport(null);
+        }}
+        onConfirm={runRoomImport}
       />
     </div>
   );

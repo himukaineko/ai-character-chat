@@ -41,6 +41,7 @@ import {
 } from "../lib/messages";
 import { listMemories, updateMemory } from "../lib/memories";
 import { computeCurrentStats, listStatChanges } from "../lib/gameStats";
+import { exportRoomToFile } from "../lib/exportImport";
 import { loadAppSettings, saveAppSettings, saveLastRoomId } from "../lib/settings";
 import {
   CHAT_FONT_SIZE_VALUES,
@@ -521,6 +522,9 @@ export function RoomPage() {
             onResetAll={async () => {
               await resetRoomConversationData(room.id);
               await reload();
+            }}
+            onExportRoom={async (includeLog) => {
+              await exportRoomToFile(room.id, includeLog);
             }}
           />
           <button
