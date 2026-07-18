@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 // ルーム画面の上部バーアイコンの凡例(機能追加): 実物と同じSVGを表示して迷いをなくす
 import {
   ImageIcon,
+  ImmersiveIcon,
   ListIcon,
   PanelIcon,
   SettingsIcon,
@@ -229,7 +230,7 @@ export function HelpPage() {
               現在値と<Tag>展開ルール</Tag>(数値のしきい値ごとにキャラの態度・展開がどう変わるかの自由記述)は会話生成のたびにAIへ渡され、キャラの反応や話の流れに反映されます。
             </Bullet>
             <Bullet>
-              <Tag>AIにゲーム設定を作ってもらう</Tag>ボタンで、「幼馴染との恋愛シミュにしたい」のようなヒントからステータス定義一式と展開ルールをまとめて生成できます。内容は保存前に確認・修正できます。
+              <Tag>AIにゲーム設定を作ってもらう</Tag>ボタンで、「幼馴染との恋愛シミュにしたい」のようなヒントからステータス定義一式と展開ルールをまとめて生成できます。参加キャラの性格・関係も踏まえた提案になり、内容は保存前に確認・修正できます。
             </Bullet>
             <Bullet>
               チャット画面には、ステータスが変動したときに📊のマークで変動内容が表示されます(ルーム設定の<Tag>チャット内に変動を表示する</Tag>で非表示にもできます)。パネルの<Tag>メンバー</Tag>タブでは、各キャラの現在値がゲージで確認できます。
@@ -248,6 +249,9 @@ export function HelpPage() {
           <ul className="mt-3 space-y-3">
             <IconLegendRow icon={<ThemeIcon className="h-5 w-5" />} name="テーマ切替">
               押すたびにチャットの配色テーマが切り替わります(黒系→濃紺系→白系→ナチュラル系の順)。
+            </IconLegendRow>
+            <IconLegendRow icon={<ImmersiveIcon className="h-5 w-5" />} name="没入モード">
+              上部バーとナビを隠してチャットだけの表示にします(もう一度押すと戻ります)。スマホで会話に集中したいときに便利です。
             </IconLegendRow>
             <IconLegendRow icon={<PanelIcon className="h-5 w-5" />} name="パネル">
               メンバーの参加状態の一括管理と、会話から蓄積された記憶の一覧・編集を開きます。
@@ -316,10 +320,16 @@ export function HelpPage() {
           </div>
         </AccordionSection>
 
-        <AccordionSection title="やり直し">
+        <AccordionSection title="やり直し・編集">
           <BulletList>
             <Bullet>
-              メッセージをホバー(PC)または長押し(スマホ)すると<Tag>ここまで戻る</Tag>が表示され、そこまで巻き戻せます。
+              各メッセージの横の<Tag>⋯</Tag>から<Tag>ここまで戻る</Tag>・<Tag>編集</Tag>・<Tag>コピー</Tag>・<Tag>削除</Tag>が使えます(PCはホバーで表示、スマホはタップ)。トピックの区切り行は、ラベル部分のタップでも同じメニューが開きます。
+            </Bullet>
+            <Bullet>
+              <Tag>ここまで戻る</Tag>=そのメッセージ以降をまとめて巻き戻します。<Tag>編集</Tag>=巻き戻したうえで元の内容が入力欄にコピーされ、書き直してから送信し直せます。
+            </Bullet>
+            <Bullet>
+              キャラのセリフや地の文を<Tag>編集</Tag>した場合は、自分の発言ではなく元の話者の発言として置き換わり、そこから会話の続きが生成されます(入力欄の上に「◯◯の発言を編集中」と表示され、×で通常の発言に戻せます)。
             </Bullet>
             <Bullet>直近の発言だけをやり直したいときは、再生成ボタン(オプション付き)を使います。</Bullet>
             <Bullet>ログ管理からは、メッセージを段階的に削除することもできます。</Bullet>
