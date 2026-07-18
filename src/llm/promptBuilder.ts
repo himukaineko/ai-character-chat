@@ -7,6 +7,7 @@
 // 「absentのキャラについて話すな」と伝える方式は採らない(漏れのリスクがあるため)。
 import type {
   Character,
+  GameModeConfig,
   Memory,
   Message,
   NarrationLevel,
@@ -95,6 +96,15 @@ export interface PromptBuildParams {
    * 「キャラクター同士の関係」セクションとして出力する。片方でも不参加なら絶対に含めない。
    */
   world?: World;
+  /**
+   * 機能追加: ゲームモード設定。未指定・OFF・stats 0件のいずれかの場合はセクション自体を出力しない。
+   */
+  gameMode?: GameModeConfig;
+  /**
+   * 機能追加: ゲームモードの現在値(lib/gameStats.ts の computeCurrentStats の結果)。
+   * gameModeがONのときだけ意味を持つ。未指定の場合は各キャラの現在値を初期値として表示する。
+   */
+  currentStats?: Map<string, Map<string, number>>;
 }
 
 /** presence !== "absent" のメンバーのみを返す(データレベルの除外フィルタ本体) */
@@ -126,6 +136,8 @@ export function buildConversationPrompt(params: PromptBuildParams): BuiltPrompt 
     trigger,
     regenerateOptions,
     world,
+    gameMode,
+    currentStats,
   } = params;
 
   // ここで absent を除外する。以降のコードは includedMembers 以外のキャラ情報に触れない。
@@ -173,6 +185,10 @@ export function buildConversationPrompt(params: PromptBuildParams): BuiltPrompt 
 
   // ---- 5. 参加状態の指示 ----
   sections.push(buildPresenceSection(includedMembers));
+
+  // ---- 5.5 ゲームモード(機能追加。OFF・stats0件のときはセクション自体を出さない) ----
+  const gameModeText = buildGameModeSection(gameMode, currentStats, includedMembers);
+  if (gameModeText) sections.push(gameModeText);
 
   // ---- 6. ユーザー設定 ----
   sections.push(buildUserProfileSection(userProfile));
@@ -403,6 +419,57 @@ function buildPresenceSection(members: RoomMemberInfo[]): string {
     return `- ${character.name}: 参加(通常どおり会話に参加してよい)`;
   });
   return ["## 参加状態", ...lines].join("\n");
+}
+
+/**
+ * 機能追加: ゲームモードのステータス定義・現在値・展開ルール・判定指示をまとめたセクション。
+ * gameMode未指定、OFF、またはstatsが0件のときはnull(セクション自体を出力しない。
+ * 通常のルームのプロンプトには一切影響を与えない)。
+ */
+function buildGameModeSection(
+  gameMode: GameModeConfig | undefined,
+  currentStats: Map<string, Map<string, number>> | undefined,
+  includedMembers: RoomMemberInfo[],
+): string | null {
+  if (!gameMode || !gameMode.enabled || gameMode.stats.length === 0) return null;
+
+  const lines = ["## ゲームモード"];
+
+  lines.push("### ステータス定義");
+  for (const stat of gameMode.stats) {
+    lines.push(
+      `- ${stat.name}(範囲: ${stat.min}〜${stat.max}、初期値: ${stat.initial}): ${
+        stat.description.trim() || "(説明なし)"
+      }`,
+    );
+  }
+
+  lines.push("### 現在値");
+  if (includedMembers.length === 0) {
+    lines.push("(現在この場にいるキャラクターがいません)");
+  } else {
+    for (const { character } of includedMembers) {
+      const statMap = currentStats?.get(character.id);
+      const valuesText = gameMode.stats
+        .map((stat) => `${stat.name} ${statMap?.get(stat.id) ?? stat.initial}`)
+        .join("、");
+      lines.push(`- ${character.name}: ${valuesText}`);
+    }
+  }
+
+  if (gameMode.rulesPrompt.trim()) {
+    lines.push("### 展開ルール");
+    lines.push(gameMode.rulesPrompt.trim());
+  }
+
+  lines.push("### 判定指示");
+  lines.push(
+    "各ターンの変動は1ステータスあたり-5〜+5の範囲にしてください。変動なし(出力しない)が普通で、" +
+      "発言や出来事に見合った時だけ変動させてください。変動させる場合は必ず理由を添えてください。" +
+      "現在値に応じてキャラクターの態度・話の展開を変えてください。",
+  );
+
+  return lines.join("\n");
 }
 
 function buildUserProfileSection(profile: UserProfile): string {

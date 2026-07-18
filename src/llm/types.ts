@@ -9,9 +9,23 @@ export interface GeneratedMessage {
   action?: string;
 }
 
+/**
+ * 生成されたステータス変動1件(機能追加: ゲームモード)。
+ * character/statはAIが出力したキャラ名・ステータス名の生文字列で、まだID解決前の状態。
+ * conversationService側でキャラID・ステータスIDへの解決を行う(解決できないものは捨てる)。
+ */
+export interface GeneratedStatChange {
+  character: string;
+  stat: string;
+  delta: number;
+  reason: string;
+}
+
 /** 1回の生成で返るバッチ(仕様書9.3のスキーマに対応) */
 export interface GeneratedBatch {
   messages: GeneratedMessage[];
+  /** 機能追加: ゲームモードON時のみAIが出力する(スキーマ側もそのときだけ含める) */
+  statChanges?: GeneratedStatChange[];
 }
 
 /** プロンプトビルダーが組み立てる最終プロンプト */

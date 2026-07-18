@@ -2,7 +2,14 @@
 // タブ2つ: 「メンバー」(参加状態一括管理)と「記憶」(fact/relationshipの一覧、編集・削除・固定・キャラ設定に昇格)。
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { Character, Memory, MemoryType, Presence, RoomCharacterState } from "../../types";
+import type {
+  Character,
+  GameModeConfig,
+  Memory,
+  MemoryType,
+  Presence,
+  RoomCharacterState,
+} from "../../types";
 import { CharacterAvatar } from "../CharacterAvatar";
 import { ConfirmDialog } from "../ConfirmDialog";
 import {
@@ -23,6 +30,13 @@ interface SidePanelProps {
   memories: Memory[];
   /** 会話が1件でもあるか(手動整理ボタンの有効/無効判定に使う) */
   hasMessages: boolean;
+  /**
+   * 機能追加: ゲームモード設定(resolveGameMode()で解決済みのもの)。
+   * enabled=falseまたはstatsが0件の場合はゲージセクション自体を表示しない。
+   */
+  gameMode: GameModeConfig;
+  /** 機能追加: ゲームモードの現在値(lib/gameStats.ts の computeCurrentStats の結果) */
+  gameStats: Map<string, Map<string, number>>;
   onChangePresence: (characterId: string, presence: Presence) => void;
   /** 記憶を編集・削除・昇格した後に呼ばれる(親側で再読込する) */
   onMemoriesChanged: () => void;
@@ -49,6 +63,8 @@ export function SidePanel({
   members,
   memories,
   hasMessages,
+  gameMode,
+  gameStats,
   onChangePresence,
   onMemoriesChanged,
   onEditOverrides,
@@ -194,6 +210,12 @@ export function SidePanel({
                       {state.overrides.extraNotes && <li>追加メモ: {state.overrides.extraNotes}</li>}
                     </ul>
                   )}
+                  {/* ゲームモードのステータスゲージ(機能追加) */}
+                  <GameStatGauges
+                    characterId={character.id}
+                    gameMode={gameMode}
+                    gameStats={gameStats}
+                  />
                 </div>
               ))}
             </div>
@@ -309,6 +331,50 @@ export function SidePanel({
           }}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * ゲームモードのステータスをゲージ(プログレスバー風)で表示する(機能追加)。
+ * gameMode.enabled=false または stats が0件のときは何も表示しない
+ * (ゲームモードOFFの既存ルームでは常にこの分岐に入り、見た目に一切影響しない)。
+ */
+function GameStatGauges({
+  characterId,
+  gameMode,
+  gameStats,
+}: {
+  characterId: string;
+  gameMode: GameModeConfig;
+  gameStats: Map<string, Map<string, number>>;
+}) {
+  if (!gameMode.enabled || gameMode.stats.length === 0) return null;
+  const statValues = gameStats.get(characterId);
+
+  return (
+    <div className="mt-2 space-y-1.5 border-t border-[var(--chat-border,#27272a)] pt-2">
+      {gameMode.stats.map((stat) => {
+        const value = statValues?.get(stat.id) ?? stat.initial;
+        const range = Math.max(1, stat.max - stat.min);
+        const ratio = Math.min(1, Math.max(0, (value - stat.min) / range));
+        return (
+          <div key={stat.id}>
+            <div className="flex items-center justify-between text-[10px] text-[var(--chat-muted-text,#a1a1aa)]">
+              <span>{stat.name || "(名称未設定)"}</span>
+              <span>
+                {value} / {stat.max}
+              </span>
+            </div>
+            <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-[var(--chat-input-bg,#27272a)]">
+              <div
+                className="h-full rounded-full bg-indigo-500 transition-[width]"
+                style={{ width: `${ratio * 100}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

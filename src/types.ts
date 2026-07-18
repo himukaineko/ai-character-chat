@@ -106,6 +106,15 @@ export interface Room {
    * 「カスタム指定なし」を意味し、プロンプトには何も追加しない。
    */
   narratorStyle?: string;
+  /**
+   * ゲームモード設定(機能追加)。
+   * ONにすると恋愛シミュレーション等の遊び方ができる: キャラにステータス(好感度など)がつき、
+   * 会話内容に応じてAIが数値を変動させ、現在値・展開ルールがプロンプトに注入されて
+   * キャラの態度・展開に反映される。追加前に作成された既存ルームはこのフィールドを持たないため、
+   * 読み込み側は必ず undefined → 無効(OFF)として扱うこと。直接 room.gameMode を参照せず
+   * resolveGameMode() を経由すること。
+   */
+  gameMode?: GameModeConfig;
   createdAt: number;
   updatedAt: number;
 }
@@ -113,6 +122,60 @@ export interface Room {
 /** replyLength未設定(既存ルーム)の場合は "normal" 扱いにする防御的デフォルト */
 export function resolveReplyLength(replyLength: ReplyLength | undefined): ReplyLength {
   return replyLength ?? "normal";
+}
+
+/** ゲームモードのステータス定義(1項目分。機能追加: ゲームモード) */
+export interface GameStatDef {
+  id: string; // uuid(generateId()で採番)
+  name: string; // 例: 好感度
+  description: string; // 何をすると上がる/下がるかの説明(プロンプトに載せる)
+  initial: number; // 初期値
+  min: number;
+  max: number;
+}
+
+/**
+ * ゲームモード設定(ルーム単位。機能追加)。
+ * 現在値はここには持たない。変動ログ(GameStatChange)の合計から都度計算する
+ * (initial + 変動ログのdelta合計をmin/maxでクランプする方式。src/lib/gameStats.ts参照)。
+ * これにより「元に戻す」「ここまで戻る」で対応する変動ログが消えれば数値も自動的に戻る。
+ */
+export interface GameModeConfig {
+  enabled: boolean;
+  stats: GameStatDef[];
+  rulesPrompt: string; // 展開ルール(しきい値と展開の台本。自由記述)
+  /**
+   * チャット内に変動行を表示するか(機能追加内のサブオプション)。
+   * 追加前に作成されたgameMode設定はこのフィールドを持たない場合があるため、
+   * 読み込み側は必ず undefined → true(表示する)として扱うこと。resolveGameMode() 経由で解決すること。
+   */
+  showChangesInChat?: boolean;
+}
+
+/** gameMode未設定(既存ルーム)の場合はOFF扱いにする防御的デフォルト。showChangesInChat未設定もここでtrueに解決する */
+export function resolveGameMode(gameMode: GameModeConfig | undefined): GameModeConfig {
+  if (!gameMode) {
+    return { enabled: false, stats: [], rulesPrompt: "", showChangesInChat: true };
+  }
+  return { ...gameMode, showChangesInChat: gameMode.showChangesInChat ?? true };
+}
+
+/**
+ * ゲームモードのステータス変動ログ(1変動=1レコード。機能追加)。
+ * DB上はDexieの新テーブル(gameStatChanges、src/db.ts参照)に保存する。
+ * batchIdはその変動を生んだMessage群(生成バッチ)のbatchIdと同じ値を持たせることで、
+ * undo・「ここまで戻る」で対応するメッセージが削除されたときに同じバッチの変動ログも
+ * 連動して削除できるようにする(src/lib/messages.ts参照)。
+ */
+export interface GameStatChange {
+  id: string;
+  roomId: string;
+  batchId: string; // 巻き戻し・undo連動用(該当Messageのbatchidと同じ値)
+  characterId: string;
+  statId: string; // GameStatDef.id
+  delta: number;
+  reason: string; // 変動理由(AIが出力)
+  createdAt: number;
 }
 
 /** coverFocalPoint未設定の場合は中央(50/50)扱いにする防御的デフォルト */

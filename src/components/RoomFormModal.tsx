@@ -5,11 +5,14 @@
 // テーマ変数が無いため、フォールバック値(従来のダーク配色)でこれまでどおりの見た目になる。
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
-import type { Character, NarrationLevel, ReplyLength, Room, World } from "../types";
-import { resolveCoverFocalPoint, resolveReplyLength } from "../types";
+import type { Character, GameStatDef, NarrationLevel, ReplyLength, Room, World } from "../types";
+import { resolveCoverFocalPoint, resolveGameMode, resolveReplyLength } from "../types";
 import type { RoomInput } from "../lib/rooms";
 import { useBlobUrl } from "../lib/useBlobUrl";
 import { ILLUSTRATION_MAX_DIMENSION, resizeImageBlob } from "../lib/imageResize";
+import { generateId } from "../lib/id";
+import { requestGameAssist } from "../llm/gameAssist";
+import { LLMError, LLM_ERROR_MESSAGES } from "../llm/types";
 
 interface RoomFormModalProps {
   open: boolean;
@@ -46,6 +49,7 @@ function emptyForm(): RoomInput {
     coverImage: undefined,
     coverFocalPoint: undefined,
     narratorStyle: "",
+    gameMode: undefined,
   };
 }
 
@@ -186,6 +190,11 @@ export function RoomFormModal({
   const [nameError, setNameError] = useState<string | null>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
 
+  // ---- ゲームモード: AI設定生成補助(機能追加) ----
+  const [gameAssistHint, setGameAssistHint] = useState("");
+  const [gameAssisting, setGameAssisting] = useState(false);
+  const [gameAssistError, setGameAssistError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!open) return;
     if (room) {
@@ -205,10 +214,14 @@ export function RoomFormModal({
         coverFocalPoint: room.coverFocalPoint,
         // 既存ルームはnarratorStyleを持たない場合がある(未設定=空文字扱い)
         narratorStyle: room.narratorStyle ?? "",
+        // 既存ルームはgameModeを持たない場合がある(未設定=OFF扱い。表示側でresolveGameMode()を使う)
+        gameMode: room.gameMode,
       });
     } else {
       setForm(emptyForm());
     }
+    setGameAssistHint("");
+    setGameAssistError(null);
     setNameError(null);
   }, [open, room]);
 
@@ -231,6 +244,61 @@ export function RoomFormModal({
       ...f,
       memberIds: Array.from(new Set([...f.memberIds, ...selectedWorld.characterIds])),
     }));
+  };
+
+  // ---- ゲームモード編集ヘルパー(機能追加) ----
+  // 表示・編集は常にresolveGameMode()経由で解決済みの値を使う(未設定=OFFの防御的デフォルトを踏襲)
+  const gameMode = resolveGameMode(form.gameMode);
+
+  const updateGameMode = (patch: Partial<typeof gameMode>) => {
+    setForm((f) => ({ ...f, gameMode: { ...resolveGameMode(f.gameMode), ...patch } }));
+  };
+
+  const addGameStat = () => {
+    const stat: GameStatDef = {
+      id: generateId(),
+      name: "",
+      description: "",
+      initial: 0,
+      min: 0,
+      max: 100,
+    };
+    updateGameMode({ stats: [...gameMode.stats, stat] });
+  };
+
+  const updateGameStat = (id: string, patch: Partial<GameStatDef>) => {
+    updateGameMode({
+      stats: gameMode.stats.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+    });
+  };
+
+  const removeGameStat = (id: string) => {
+    updateGameMode({ stats: gameMode.stats.filter((s) => s.id !== id) });
+  };
+
+  /** 「AIにゲーム設定を作ってもらう」: ヒントからステータス定義一式+展開ルールを提案させる */
+  const handleGameAssist = async () => {
+    setGameAssisting(true);
+    setGameAssistError(null);
+    try {
+      const memberNames = form.memberIds
+        .map((id) => characters.find((c) => c.id === id)?.name)
+        .filter((n): n is string => !!n && n.trim() !== "");
+      const result = await requestGameAssist(gameAssistHint, memberNames);
+      updateGameMode({
+        enabled: true,
+        stats: result.stats.map((s) => ({ ...s, id: generateId() })),
+        rulesPrompt: result.rulesPrompt,
+      });
+    } catch (err) {
+      if (err instanceof LLMError) {
+        setGameAssistError(err.message || LLM_ERROR_MESSAGES[err.kind]);
+      } else {
+        setGameAssistError(err instanceof Error ? err.message : "AI提案の取得に失敗しました。");
+      }
+    } finally {
+      setGameAssisting(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -443,6 +511,168 @@ export function RoomFormModal({
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* ゲームモード(機能追加): ステータス・展開ルールを設定し、恋愛シミュレーション的な遊び方を可能にする */}
+          <div className="rounded-md border border-[var(--chat-button-border,#3f3f46)] p-3">
+            <label className="flex items-center justify-between gap-2 text-sm font-medium text-[var(--chat-button-text,#d4d4d8)]">
+              <span>ゲームモード</span>
+              <span className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={gameMode.enabled}
+                  onChange={(e) => updateGameMode({ enabled: e.target.checked })}
+                  className="accent-indigo-500"
+                />
+                {gameMode.enabled ? "ON" : "OFF"}
+              </span>
+            </label>
+            <p className="mt-1 text-xs text-[var(--chat-placeholder-text,#71717a)]">
+              ONにすると、キャラに好感度などのステータスがつき、会話の内容に応じてAIが数値を変動させます。現在値と展開ルールは会話生成時にAIへ渡されます。
+            </p>
+
+            {gameMode.enabled && (
+              <div className="mt-3 space-y-3 border-t border-[var(--chat-button-border,#3f3f46)] pt-3">
+                {/* AI設定生成補助 */}
+                <div className="rounded-md border border-indigo-800/60 bg-indigo-500/10 p-2.5">
+                  <label className="mb-1 block text-xs font-medium text-[var(--chat-accent-text,#a5b4fc)]">
+                    AIにゲーム設定を作ってもらう
+                  </label>
+                  <textarea
+                    value={gameAssistHint}
+                    onChange={(e) => setGameAssistHint(e.target.value)}
+                    rows={2}
+                    placeholder="例: 幼馴染との恋愛シミュにしたい"
+                    className="w-full resize-none rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#27272a)] px-2 py-1.5 text-xs text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
+                  />
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={gameAssisting}
+                      onClick={() => void handleGameAssist()}
+                      className="rounded-md bg-indigo-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {gameAssisting ? "生成中…" : "AIにゲーム設定を作ってもらう"}
+                    </button>
+                    <p className="text-[11px] text-[var(--chat-placeholder-text,#71717a)]">
+                      ステータス定義・展開ルールを上書きします。
+                    </p>
+                  </div>
+                  {gameAssistError && (
+                    <p className="mt-1.5 text-xs text-[var(--chat-danger-text,#f87171)]">{gameAssistError}</p>
+                  )}
+                </div>
+
+                {/* ステータス定義 */}
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="text-xs font-medium text-[var(--chat-button-text,#d4d4d8)]">
+                      ステータス
+                    </label>
+                    <button
+                      type="button"
+                      onClick={addGameStat}
+                      className="text-xs text-[var(--chat-accent-text,#818cf8)] hover:underline"
+                    >
+                      + ステータスを追加
+                    </button>
+                  </div>
+                  {gameMode.stats.length === 0 ? (
+                    <p className="rounded-md border border-dashed border-[var(--chat-button-border,#3f3f46)] p-2 text-xs text-[var(--chat-placeholder-text,#71717a)]">
+                      まだステータスがありません。「+ ステータスを追加」または上のAI補助で作成してください。
+                    </p>
+                  ) : (
+                    <div className="space-y-2">
+                      {gameMode.stats.map((stat) => (
+                        <div
+                          key={stat.id}
+                          className="rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#27272a)] p-2"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              value={stat.name}
+                              onChange={(e) => updateGameStat(stat.id, { name: e.target.value })}
+                              placeholder="名前(例: 好感度)"
+                              className="w-full min-w-0 flex-1 rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#18181b)] px-2 py-1 text-xs text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removeGameStat(stat.id)}
+                              className="shrink-0 rounded-md border border-[var(--chat-button-border,#3f3f46)] px-2 py-1 text-xs text-[var(--chat-danger-text,#f87171)] hover:bg-red-500/10"
+                            >
+                              削除
+                            </button>
+                          </div>
+                          <textarea
+                            value={stat.description}
+                            onChange={(e) => updateGameStat(stat.id, { description: e.target.value })}
+                            rows={2}
+                            placeholder="何をすると上がる/下がるかの説明(プロンプトに使われます)"
+                            className="mt-1.5 w-full resize-none rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#18181b)] px-2 py-1 text-xs text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
+                          />
+                          <div className="mt-1.5 grid grid-cols-3 gap-1.5">
+                            <label className="block text-[10px] text-[var(--chat-placeholder-text,#a1a1aa)]">
+                              初期値
+                              <input
+                                type="number"
+                                value={stat.initial}
+                                onChange={(e) =>
+                                  updateGameStat(stat.id, { initial: Number(e.target.value) })
+                                }
+                                className="mt-0.5 w-full rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#18181b)] px-1.5 py-1 text-xs text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
+                              />
+                            </label>
+                            <label className="block text-[10px] text-[var(--chat-placeholder-text,#a1a1aa)]">
+                              最小
+                              <input
+                                type="number"
+                                value={stat.min}
+                                onChange={(e) => updateGameStat(stat.id, { min: Number(e.target.value) })}
+                                className="mt-0.5 w-full rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#18181b)] px-1.5 py-1 text-xs text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
+                              />
+                            </label>
+                            <label className="block text-[10px] text-[var(--chat-placeholder-text,#a1a1aa)]">
+                              最大
+                              <input
+                                type="number"
+                                value={stat.max}
+                                onChange={(e) => updateGameStat(stat.id, { max: Number(e.target.value) })}
+                                className="mt-0.5 w-full rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#18181b)] px-1.5 py-1 text-xs text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 展開ルール */}
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-[var(--chat-button-text,#d4d4d8)]">
+                    展開ルール(数値のしきい値と展開の台本。自由記述)
+                  </label>
+                  <textarea
+                    value={gameMode.rulesPrompt}
+                    onChange={(e) => updateGameMode({ rulesPrompt: e.target.value })}
+                    rows={4}
+                    placeholder="例: 好感度0〜20はよそよそしい。21〜50は徐々に心を開く。51〜80は好意を隠さなくなる。81〜100は告白イベントが起きてもよい。"
+                    className="w-full resize-none rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#27272a)] px-2 py-1.5 text-xs text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-xs text-[var(--chat-button-text,#d4d4d8)]">
+                  <input
+                    type="checkbox"
+                    checked={gameMode.showChangesInChat ?? true}
+                    onChange={(e) => updateGameMode({ showChangesInChat: e.target.checked })}
+                    className="accent-indigo-500"
+                  />
+                  チャット内に変動を表示する
+                </label>
+              </div>
+            )}
           </div>
 
           <label className="flex items-center gap-2 text-sm text-[var(--chat-button-text,#d4d4d8)]">

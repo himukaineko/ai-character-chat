@@ -9,6 +9,7 @@ import type {
   Memory,
   Summary,
   World,
+  GameStatChange,
 } from "./types";
 
 export class AppDatabase extends Dexie {
@@ -26,6 +27,8 @@ export class AppDatabase extends Dexie {
   summaries!: EntityTable<Summary, "id">;
   // ワールド(世界線グループ、機能追加)
   worlds!: EntityTable<World, "id">;
+  // ゲームモードのステータス変動ログ(機能追加)。現在値はここから都度計算する(直接保存しない)
+  gameStatChanges!: EntityTable<GameStatChange, "id">;
 
   constructor() {
     super("ai-character-chat");
@@ -49,6 +52,20 @@ export class AppDatabase extends Dexie {
       memories: "id, roomId, disabled, pinned, createdAt",
       summaries: "id, roomId, createdAt",
       worlds: "id, name, updatedAt",
+    });
+
+    // v3: ゲームモードのステータス変動ログ(gameStatChanges)テーブルを追加(機能追加)。
+    // 既存テーブルの定義は変更しない。batchIdでMessageの生成バッチと連動させるため
+    // roomIdだけでなくbatchIdにもインデックスを張る。
+    this.version(3).stores({
+      characters: "id, name, updatedAt",
+      rooms: "id, name, updatedAt",
+      roomCharacterStates: "[roomId+characterId], roomId, characterId",
+      messages: "id, roomId, batchId, createdAt",
+      memories: "id, roomId, disabled, pinned, createdAt",
+      summaries: "id, roomId, createdAt",
+      worlds: "id, name, updatedAt",
+      gameStatChanges: "id, roomId, batchId",
     });
   }
 }

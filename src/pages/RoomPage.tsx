@@ -1,13 +1,14 @@
 // ルーム画面(チャット、仕様書10.2)
 // 会話コア(Phase 2): トピック投入 / 発言 / 次の会話を生成 / 再生成 / 戻る / 削除
 // 記憶システム(Phase 3): 会話生成後のバックグラウンド要約+記憶抽出、記憶一覧、上書き編集
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { useAppStore } from "../store";
 import { RoomFormModal } from "../components/RoomFormModal";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { MemberBar } from "../components/room/MemberBar";
 import { ChatMessageItem } from "../components/room/ChatMessageItem";
+import { GameStatChangesRow } from "../components/room/GameStatChangesRow";
 import { TypingIndicator } from "../components/room/TypingIndicator";
 import { ChatInput, type InputMode } from "../components/room/ChatInput";
 import { AUTO_GENERATE_MAX_COUNT } from "../lib/autoGenerate";
@@ -28,8 +29,8 @@ import {
   MemberDetailModal,
   type MemberDetailTab,
 } from "../components/room/MemberDetailModal";
-import type { Memory, Message, Presence, RoomCharacterOverrides } from "../types";
-import { resolveChatFontSize, resolveChatTheme } from "../types";
+import type { GameStatChange, Memory, Message, Presence, RoomCharacterOverrides } from "../types";
+import { resolveChatFontSize, resolveChatTheme, resolveGameMode } from "../types";
 import {
   deleteLogAndSummary,
   deleteLogOnly,
@@ -39,6 +40,7 @@ import {
   rewindTo,
 } from "../lib/messages";
 import { listMemories, updateMemory } from "../lib/memories";
+import { computeCurrentStats, listStatChanges } from "../lib/gameStats";
 import { loadAppSettings, saveAppSettings, saveLastRoomId } from "../lib/settings";
 import {
   CHAT_FONT_SIZE_VALUES,
@@ -95,6 +97,9 @@ export function RoomPage() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
+  // ゲームモードのステータス変動ログ(機能追加)。gameStatChangesテーブルから読み込み、
+  // チャット内の変動行・サイドパネルのゲージ表示に使う。
+  const [statChanges, setStatChanges] = useState<GameStatChange[]>([]);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<{ message: string; kind?: LLMErrorKind } | null>(null);
 
@@ -185,9 +190,14 @@ export function RoomPage() {
 
   const reload = useCallback(async () => {
     if (!id) return;
-    const [msgs, mems] = await Promise.all([listMessages(id), listMemories(id)]);
+    const [msgs, mems, changes] = await Promise.all([
+      listMessages(id),
+      listMemories(id),
+      listStatChanges(id),
+    ]);
     setMessages(msgs);
     setMemories(mems);
+    setStatChanges(changes);
   }, [id]);
 
   useEffect(() => {
@@ -240,6 +250,25 @@ export function RoomPage() {
   const activeMemberNames = members
     .filter((m) => m.state.presence === "active")
     .map((m) => m.character.name);
+
+  // ゲームモード(機能追加): 常にresolveGameMode()経由で解決した値を使う(未設定=OFF)
+  const gameMode = resolveGameMode(room.gameMode);
+  const gameStats = computeCurrentStats(gameMode, statChanges, room.memberIds);
+  const characterNameById = new Map(members.map((m) => [m.character.id, m.character.name]));
+
+  // チャット内の変動表示(機能追加): バッチIDごとの変動一覧と、そのバッチの最後のメッセージIDを
+  // 求めておき、メッセージ描画時に「このメッセージが該当バッチの最後なら直後に変動行を出す」
+  // という形で対応づける(新しいMessageは作らない)。
+  const changesByBatch = new Map<string, GameStatChange[]>();
+  for (const c of statChanges) {
+    const list = changesByBatch.get(c.batchId);
+    if (list) list.push(c);
+    else changesByBatch.set(c.batchId, [c]);
+  }
+  const lastMessageIdByBatch = new Map<string, string>();
+  for (const m of messages) {
+    lastMessageIdByBatch.set(m.batchId, m.id);
+  }
 
   const lastMessage = messages[messages.length - 1];
   const canRegenerate = !!lastMessage && (lastMessage.type === "dialogue" || lastMessage.type === "narration");
@@ -621,16 +650,30 @@ export function RoomPage() {
           </div>
         )}
 
-        {messages.map((m) => (
-          <ChatMessageItem
-            key={m.id}
-            message={m}
-            character={charactersByName.get(m.speaker)}
-            onRewind={(messageId) => setRewindTarget(messages.find((mm) => mm.id === messageId) ?? null)}
-            onEdit={(messageId) => setEditTarget(messages.find((mm) => mm.id === messageId) ?? null)}
-            onDelete={(messageId) => setDeleteTarget(messages.find((mm) => mm.id === messageId) ?? null)}
-          />
-        ))}
+        {messages.map((m) => {
+          // ゲームモード(機能追加): このメッセージがそのバッチの最後のメッセージなら、
+          // showChangesInChatが有効な場合に限り直後へ変動行を表示する。
+          const isLastOfBatch = lastMessageIdByBatch.get(m.batchId) === m.id;
+          const batchChanges = isLastOfBatch ? changesByBatch.get(m.batchId) ?? [] : [];
+          return (
+            <Fragment key={m.id}>
+              <ChatMessageItem
+                message={m}
+                character={charactersByName.get(m.speaker)}
+                onRewind={(messageId) => setRewindTarget(messages.find((mm) => mm.id === messageId) ?? null)}
+                onEdit={(messageId) => setEditTarget(messages.find((mm) => mm.id === messageId) ?? null)}
+                onDelete={(messageId) => setDeleteTarget(messages.find((mm) => mm.id === messageId) ?? null)}
+              />
+              {(gameMode.showChangesInChat ?? true) && batchChanges.length > 0 && (
+                <GameStatChangesRow
+                  changes={batchChanges}
+                  gameMode={gameMode}
+                  characterNameById={characterNameById}
+                />
+              )}
+            </Fragment>
+          );
+        })}
 
         {(generating || autoGenerating) && <TypingIndicator label={typingLabel} />}
 
@@ -689,6 +732,8 @@ export function RoomPage() {
         members={members}
         memories={memories}
         hasMessages={messages.length > 0}
+        gameMode={gameMode}
+        gameStats={gameStats}
         onChangePresence={handleChangePresence}
         onMemoriesChanged={() => void reload()}
         onEditOverrides={(characterId) => setMemberDetail({ characterId, tab: "overrides" })}

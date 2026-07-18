@@ -3,7 +3,8 @@
 // ルームのメンバー・記憶・要約・直近ログをDBから集めてプロンプトを組み立て、
 // 生成結果を検証してからメッセージとして保存する。
 import { db } from "../db";
-import type { Message, Room, UserProfile, World } from "../types";
+import type { GameModeConfig, GameStatChange, Message, Room, UserProfile, World } from "../types";
+import { resolveGameMode } from "../types";
 import { loadAppSettings, loadUserProfile } from "../lib/settings";
 import {
   addEditedMessage,
@@ -14,6 +15,7 @@ import {
   saveGeneratedBatch,
 } from "../lib/messages";
 import { listMemories, listSummaries } from "../lib/memories";
+import { addStatChanges, computeCurrentStats, listStatChanges } from "../lib/gameStats";
 import { createMainLLMClient } from "./createClient";
 import {
   buildConversationPrompt,
@@ -24,9 +26,9 @@ import {
   type RoomMemberInfo,
 } from "./promptBuilder";
 import { containsAnyWord, runPostCheck, type PostCheckContext, type PostCheckResult } from "./postCheck";
-import { buildNameCandidate } from "./nameResolver";
-import { CONVERSATION_SCHEMA } from "./schema";
-import { LLMError, type GeneratedMessage, type LLMClient } from "./types";
+import { buildNameCandidate, resolveSpeakerName } from "./nameResolver";
+import { buildConversationSchema } from "./schema";
+import { LLMError, type GeneratedMessage, type GeneratedStatChange, type LLMClient } from "./types";
 
 export interface GenerateResult {
   batchId: string;
@@ -162,6 +164,14 @@ async function generateBatch(
   const recentCount = Math.max(1, settings.recentMessageCount || 30);
   const recentMessages = allMessages.slice(-recentCount);
 
+  // 機能追加: ゲームモード設定と現在値をロードする。ON かつ stats が1件以上あるときだけ
+  // 実際にプロンプト・スキーマへ反映する(それ以外は通常モードと完全に同じ挙動にする)。
+  const gameMode = resolveGameMode(room.gameMode);
+  const gameModeActive = gameMode.enabled && gameMode.stats.length > 0;
+  const currentStats = gameModeActive
+    ? computeCurrentStats(gameMode, await listStatChanges(roomId), room.memberIds)
+    : undefined;
+
   const prompt = buildConversationPrompt({
     room,
     members,
@@ -172,17 +182,21 @@ async function generateBatch(
     trigger,
     regenerateOptions,
     world,
+    gameMode,
+    currentStats,
   });
 
   const ctx = buildPostCheckContext(room, members, trigger);
+  // 機能追加: ゲームモードON時のみstatChanges配列を含むスキーマを使う(通常モードは従来どおり)
+  const schema = buildConversationSchema(gameModeActive);
 
   // 1回目の生成
-  let generated = await client.generateConversation(prompt, CONVERSATION_SCHEMA);
+  let generated = await client.generateConversation(prompt, schema);
   let check = runPostCheck(generated, ctx);
 
   if (!check.ok) {
     // 不参加キャラ混入・未知の話者などはバッチ全体を破棄し、1回だけ自動リトライする(仕様書9.4 / 13章)
-    generated = await client.generateConversation(prompt, CONVERSATION_SCHEMA);
+    generated = await client.generateConversation(prompt, schema);
     check = runPostCheck(generated, ctx);
     if (!check.ok) {
       throw new LLMError(
@@ -202,7 +216,75 @@ async function generateBatch(
   }
 
   const saved = await saveGeneratedBatch(roomId, finalMessages);
-  return { batchId: saved[0].batchId, messages: saved };
+  const batchId = saved[0].batchId;
+
+  // 機能追加: ゲームモードON時、AIが出力したstatChangesをキャラID・ステータスIDに解決して保存する。
+  // 解決できないもの(名前が一致しない等)は仕様どおり黙って捨てる(エラーにしない)。
+  if (gameModeActive) {
+    const resolvedChanges = resolveGeneratedStatChanges(
+      generated.statChanges,
+      roomId,
+      batchId,
+      gameMode,
+      members,
+    );
+    if (resolvedChanges.length > 0) {
+      await addStatChanges(resolvedChanges);
+    }
+  }
+
+  return { batchId, messages: saved };
+}
+
+/**
+ * 機能追加: AIが出力したstatChanges(キャラ名・ステータス名の生文字列)を、
+ * キャラID・ステータスIDに解決してDB保存用の形に変換する。
+ * - キャラ名は nameResolver.ts の名前解決(ニックネーム・括弧除去)を再利用する
+ * - ステータス名は完全一致(前後空白を無視)でのみ解決する
+ * - どちらかが解決できない場合はその1件を黙って捨てる(仕様: エラーにしない)
+ * - deltaは-5〜+5にクランプし、0(実質「変動なし」)になったものは保存しない
+ */
+function resolveGeneratedStatChanges(
+  generatedChanges: GeneratedStatChange[] | undefined,
+  roomId: string,
+  batchId: string,
+  gameMode: GameModeConfig,
+  members: RoomMemberInfo[],
+): Omit<GameStatChange, "id" | "createdAt">[] {
+  if (!generatedChanges || generatedChanges.length === 0) return [];
+
+  const included = filterIncludedMembers(members);
+  const candidates = included.map((m) => buildNameCandidate(m.character));
+  const characterIdByCanonicalName = new Map(
+    included.map((m) => [m.character.name.trim(), m.character.id]),
+  );
+  const statIdByName = new Map(gameMode.stats.map((s) => [s.name.trim(), s.id]));
+
+  const results: Omit<GameStatChange, "id" | "createdAt">[] = [];
+  for (const change of generatedChanges) {
+    const resolvedName = resolveSpeakerName(change.character ?? "", candidates);
+    if (!resolvedName) continue;
+    const characterId = characterIdByCanonicalName.get(resolvedName);
+    if (!characterId) continue;
+
+    const statId = statIdByName.get((change.stat ?? "").trim());
+    if (!statId) continue;
+
+    const rawDelta = Number(change.delta);
+    if (!Number.isFinite(rawDelta)) continue;
+    const delta = Math.max(-5, Math.min(5, Math.round(rawDelta)));
+    if (delta === 0) continue;
+
+    results.push({
+      roomId,
+      batchId,
+      characterId,
+      statId,
+      delta,
+      reason: typeof change.reason === "string" && change.reason.trim() ? change.reason.trim() : "(理由未記載)",
+    });
+  }
+  return results;
 }
 
 /**

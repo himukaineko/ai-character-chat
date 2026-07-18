@@ -2,6 +2,7 @@
 import { generateId } from "./id";
 import { db } from "../db";
 import type { Room, RoomCharacterState } from "../types";
+import { deleteAllStatChanges } from "./gameStats";
 
 /** 新規作成用の入力(id/createdAt/updatedAtはここで採番する) */
 export type RoomInput = Omit<Room, "id" | "createdAt" | "updatedAt">;
@@ -113,18 +114,20 @@ export async function updateRoomCharacterState(
 /**
  * ルームを削除する。
  * ルームに紐づく messages / memories / summaries / roomCharacterStates もすべて削除する(トランザクション)。
+ * 機能追加(ゲームモード): gameStatChanges(ステータス変動ログ)もここで削除し、孤立レコードを残さない。
  * キャラ本体は無傷のまま。
  */
 export async function deleteRoom(id: string): Promise<void> {
   await db.transaction(
     "rw",
-    [db.rooms, db.messages, db.memories, db.summaries, db.roomCharacterStates],
+    [db.rooms, db.messages, db.memories, db.summaries, db.roomCharacterStates, db.gameStatChanges],
     async () => {
       await db.rooms.delete(id);
       await db.messages.where("roomId").equals(id).delete();
       await db.memories.where("roomId").equals(id).delete();
       await db.summaries.where("roomId").equals(id).delete();
       await db.roomCharacterStates.where("roomId").equals(id).delete();
+      await deleteAllStatChanges(id);
     },
   );
 }

@@ -10,6 +10,7 @@ import {
   deleteSummariesCoveringMessageIds,
   disableMemoriesBySourceMessageIds,
 } from "./memories";
+import { deleteAllStatChanges, deleteStatChangesByBatchIds } from "./gameStats";
 
 /** 指定ルームの会話ログを取得(作成日時の昇順) */
 export async function listMessages(roomId: string): Promise<Message[]> {
@@ -153,10 +154,16 @@ export async function saveGeneratedBatch(
   return messages;
 }
 
-/** 直前の生成を取り消す(仕様書7.1): 同一batchIdのメッセージをまとめて削除する */
+/**
+ * 直前の生成を取り消す(仕様書7.1): 同一batchIdのメッセージをまとめて削除する。
+ * 機能追加(ゲームモード): 同じbatchIdのgameStatChanges(ステータス変動ログ)も連動して削除する。
+ * これにより取り消した生成でついた変動も自動的に無かったことになる(現在値は変動ログの合計から
+ * 都度計算する方式のため、ログさえ消せば数値側は何もしなくても戻る)。
+ */
 export async function deleteBatch(roomId: string, batchId: string): Promise<void> {
-  await db.transaction("rw", db.messages, async () => {
+  await db.transaction("rw", [db.messages, db.gameStatChanges], async () => {
     await db.messages.where({ roomId, batchId }).delete();
+    await deleteStatChangesByBatchIds(roomId, new Set([batchId]));
   });
 }
 
@@ -183,49 +190,78 @@ export async function deleteSingleMessage(roomId: string, messageId: string): Pr
 /**
  * 「ここまで戻る」(仕様書7.2): 選択した発言以降(選択した発言を含む)をすべて削除する。
  * 削除範囲の発言を出どころに持つ記憶はdisabled化し、削除範囲にかかる要約も削除する。
+ *
+ * 機能追加(ゲームモード): 削除したメッセージ群が属するbatchIdの集合を求め、
+ * それらのbatchIdを持つgameStatChangesもまとめて削除する。バッチの一部だけを巻き戻した場合
+ * (バッチ途中のメッセージを起点に選んだ場合)でも、そのバッチの変動ログは全件取り消す
+ * (バッチ単位でしか変動を紐づけていないため、部分的な巻き戻しに対応する変動だけを
+ * 見分けることができない。会話の一部が消えた以上、その生成による変動全体を無かったことにする
+ * という方針にする)。
  */
 export async function rewindTo(roomId: string, messageId: string): Promise<void> {
-  await db.transaction("rw", [db.messages, db.memories, db.summaries], async () => {
-    const all = (await db.messages.where("roomId").equals(roomId).toArray()).sort(
-      (a, b) => a.createdAt - b.createdAt,
-    );
-    const targetIndex = all.findIndex((m) => m.id === messageId);
-    if (targetIndex === -1) return;
+  await db.transaction(
+    "rw",
+    [db.messages, db.memories, db.summaries, db.gameStatChanges],
+    async () => {
+      const all = (await db.messages.where("roomId").equals(roomId).toArray()).sort(
+        (a, b) => a.createdAt - b.createdAt,
+      );
+      const targetIndex = all.findIndex((m) => m.id === messageId);
+      if (targetIndex === -1) return;
 
-    const toDelete = all.slice(targetIndex);
-    const deletedIds = new Set(toDelete.map((m) => m.id));
+      const toDelete = all.slice(targetIndex);
+      const deletedIds = new Set(toDelete.map((m) => m.id));
+      const affectedBatchIds = new Set(toDelete.map((m) => m.batchId));
 
-    for (const id of deletedIds) {
-      await db.messages.delete(id);
-    }
-    await disableMemoriesBySourceMessageIds(roomId, deletedIds);
-    await deleteSummariesCoveringMessageIds(roomId, deletedIds);
-  });
+      for (const id of deletedIds) {
+        await db.messages.delete(id);
+      }
+      await disableMemoriesBySourceMessageIds(roomId, deletedIds);
+      await deleteSummariesCoveringMessageIds(roomId, deletedIds);
+      await deleteStatChangesByBatchIds(roomId, affectedBatchIds);
+    },
+  );
 }
 
-/** ログ削除(段階1): メッセージのみ削除。記憶・要約・ルーム設定は残す(仕様書7.4) */
+/**
+ * ログ削除(段階1): メッセージのみ削除。記憶・要約・ルーム設定は残す(仕様書7.4)。
+ * 機能追加(ゲームモード): メッセージが無くなればゲームの変動履歴も意味を持たないため、
+ * このルームのgameStatChangesも全削除する(現在値は初期値まで戻る)。
+ */
 export async function deleteLogOnly(roomId: string): Promise<void> {
-  await db.transaction("rw", db.messages, async () => {
+  await db.transaction("rw", [db.messages, db.gameStatChanges], async () => {
     await db.messages.where("roomId").equals(roomId).delete();
+    await deleteAllStatChanges(roomId);
   });
 }
 
-/** ログ削除(段階2): メッセージ+要約を削除。記憶は残す(仕様書7.4) */
+/**
+ * ログ削除(段階2): メッセージ+要約を削除。記憶は残す(仕様書7.4)。
+ * 機能追加(ゲームモード): 段階1と同様、このルームのgameStatChangesも全削除する。
+ */
 export async function deleteLogAndSummary(roomId: string): Promise<void> {
-  await db.transaction("rw", [db.messages, db.summaries], async () => {
+  await db.transaction("rw", [db.messages, db.summaries, db.gameStatChanges], async () => {
     await db.messages.where("roomId").equals(roomId).delete();
     await deleteAllSummaries(roomId);
+    await deleteAllStatChanges(roomId);
   });
 }
 
 /**
  * ルーム完全リセット(段階3): メッセージ・要約・記憶をすべて削除する。
  * キャラ本体・ルーム設定・参加状態(presence/overrides)は無傷のまま残す(仕様書7.4)。
+ * 機能追加(ゲームモード): このルームのgameStatChangesも全削除する(ゲーム設定自体はルーム設定
+ * なので残るが、進行状況はリセットされる)。
  */
 export async function resetRoomConversationData(roomId: string): Promise<void> {
-  await db.transaction("rw", [db.messages, db.memories, db.summaries], async () => {
-    await db.messages.where("roomId").equals(roomId).delete();
-    await deleteAllMemories(roomId);
-    await deleteAllSummaries(roomId);
-  });
+  await db.transaction(
+    "rw",
+    [db.messages, db.memories, db.summaries, db.gameStatChanges],
+    async () => {
+      await db.messages.where("roomId").equals(roomId).delete();
+      await deleteAllMemories(roomId);
+      await deleteAllSummaries(roomId);
+      await deleteAllStatChanges(roomId);
+    },
+  );
 }
