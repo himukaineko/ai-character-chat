@@ -281,10 +281,18 @@ export function RoomFormModal({
     setGameAssisting(true);
     setGameAssistError(null);
     try {
-      const memberNames = form.memberIds
-        .map((id) => characters.find((c) => c.id === id)?.name)
-        .filter((n): n is string => !!n && n.trim() !== "");
-      const result = await requestGameAssist(gameAssistHint, memberNames);
+      // 機能追加: 名前だけでなく性格・関係・秘密も渡し、キャラの性格を加味した
+      // ステータス・展開ルール(例: ヤンデレは好感度が高いと病む)を提案できるようにする
+      const members = form.memberIds
+        .map((id) => characters.find((c) => c.id === id))
+        .filter((c): c is Character => !!c && c.name.trim() !== "")
+        .map((c) => ({
+          name: c.name,
+          personality: c.personality,
+          relationToUser: c.relationToUser,
+          dreamsWorriesSecrets: c.dreamsWorriesSecrets,
+        }));
+      const result = await requestGameAssist(gameAssistHint, members);
       updateGameMode({
         enabled: true,
         stats: result.stats.map((s) => ({ ...s, id: generateId() })),

@@ -17,23 +17,58 @@ export interface GameAssistResult {
 }
 
 /**
+ * AI提案の文脈として渡す参加キャラの要約(機能追加: 性格を加味した提案)。
+ * 名前だけでなく性格・関係・秘密も渡すことで、「ヤンデレは好感度が高いと病む」のような
+ * キャラごとの分岐を含む展開ルールを提案できるようにする。
+ */
+export interface GameAssistMember {
+  name: string;
+  personality: string;
+  relationToUser: string;
+  dreamsWorriesSecrets: string;
+}
+
+/** プロンプト肥大化を防ぐため、キャラ設定の各項目はこの文字数で打ち切って渡す */
+const MEMBER_FIELD_MAX_CHARS = 150;
+
+function truncateField(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= MEMBER_FIELD_MAX_CHARS) return trimmed;
+  return `${trimmed.slice(0, MEMBER_FIELD_MAX_CHARS)}…`;
+}
+
+/** 参加キャラ1人分をプロンプト用の1行にまとめる(空の項目は省く) */
+function memberLine(m: GameAssistMember): string {
+  const parts = [`- ${m.name.trim()}`];
+  const details: string[] = [];
+  if (m.personality.trim()) details.push(`性格: ${truncateField(m.personality)}`);
+  if (m.relationToUser.trim()) details.push(`ユーザーとの関係: ${truncateField(m.relationToUser)}`);
+  if (m.dreamsWorriesSecrets.trim())
+    details.push(`夢・悩み・秘密: ${truncateField(m.dreamsWorriesSecrets)}`);
+  return details.length > 0 ? `${parts[0]}(${details.join(" / ")})` : parts[0];
+}
+
+/**
  * ユーザーの簡単なヒントから、ゲームモードのステータス定義一式+展開ルールをAIに生成させる。
- * characterNames を渡すと、このルームの参加キャラ名に触れた展開ルールを作りやすくなる(空でもよい)。
+ * members を渡すと、このルームの参加キャラの名前・性格・関係を踏まえた
+ * キャラ別の展開ルールを作れるようになる(空でもよい)。
  *
  * APIキー未設定などの場合は LLMError がそのまま投げられる。呼び出し側で
  * LLM_ERROR_MESSAGES を使って日本語エラーを表示すること。
  */
 export async function requestGameAssist(
   hint: string,
-  characterNames: string[] = [],
+  members: GameAssistMember[] = [],
 ): Promise<GameAssistResult> {
   const settings = loadAppSettings();
   // APIキー未設定はここでLLMError("missingKey", ...)が投げられる
   const client = createLiteLLMClient(settings);
 
   const characterLine =
-    characterNames.length > 0
-      ? `このルームの参加キャラクター: ${characterNames.join("、")}`
+    members.length > 0
+      ? ["このルームの参加キャラクター(性格を必ず加味すること):", ...members.map(memberLine)].join(
+          "\n",
+        )
       : "参加キャラクターは未定です。一般的な形で提案してください。";
 
   const prompt = [
@@ -48,6 +83,8 @@ export async function requestGameAssist(
     "",
     "## ステータス定義(stats)の考え方",
     "- 1〜3個程度、少なすぎず多すぎない数を提案する(ユーザーのヒントから読み取れる数があればそれに従う)",
+    "- 参加キャラクターの情報がある場合は、そのキャラ構成・性格に合ったステータスを選ぶ" +
+      "(例: 執着の強いキャラがいるなら「依存度」、秘密を抱えたキャラがいるなら「疑惑度」など)",
     "- nameは短い日本語の名詞(例: 好感度、警戒度、信頼度)",
     "- descriptionには、会話の中で何をすると上がる/下がるのかを具体的に書く" +
       "(例: 「ユーザーに優しくされると上がる。冷たくされたり約束を破られると下がる」)",
@@ -59,6 +96,10 @@ export async function requestGameAssist(
     "- 「0〜20: よそよそしい」「21〜50: 徐々に心を開く」「51〜80: 好意を隠さなくなる」" +
       "「81〜100: 特別な展開(告白イベントなど)が起きてもよい」のように、しきい値と具体的な変化を" +
       "セットで書く(ステータスが複数ある場合は、それぞれについて触れる)",
+    "- 参加キャラクターの情報がある場合は、キャラ名を出してキャラ別に書き、同じ数値帯でも性格に応じて" +
+      "反応・展開が変わるようにする(例: 依存的・執着の強い性格のキャラは好感度が高くなると病む・" +
+      "束縛する方向へ、素直な性格のキャラは優しくなる方向へ)。夢・悩み・秘密があるキャラは、" +
+      "特定の数値帯でそれが明かされる・破滅につながる、といった展開に活かしてよい",
     "- AIが会話生成時にそのまま参照する文章になるので、箇条書きで簡潔にまとめる",
     "",
     "## 出力形式",
