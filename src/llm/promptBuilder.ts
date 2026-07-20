@@ -198,7 +198,7 @@ export function buildConversationPrompt(params: PromptBuildParams): BuiltPrompt 
   if (memoryText) sections.push(memoryText);
 
   // ---- 8. 会話要約(古い順。現在のメンバーに関係ない期間は除外) ----
-  const summaryText = buildSummarySection(summaries, includedIds);
+  const summaryText = buildSummarySection(summaries, includedIds, includedMembers);
   if (summaryText) sections.push(summaryText);
 
   // ---- 9. 直近ログ ----
@@ -543,8 +543,22 @@ function buildMemorySection(
  * 要約を古い順に並べて渡す。
  * presentCharacterIds が現在の参加/聞いているメンバーと1人も重ならない要約
  * (今のメンバー構成に無関係な過去の期間)は除外する(仕様書5.4)。
+ *
+ * 機能追加(知識の帰属): 各要約に「その期間その場にいたキャラ」を添え、
+ * いなかったキャラはその内容を知らない前提で振る舞うよう指示する。
+ * これにより、二人きりの場面で明かされた秘密が要約に入っても、
+ * その場にいなかったキャラが知っているかのように振る舞うことを防ぐ。
+ * 表示する名前は現在の参加/聞いているメンバーに限定する(不参加キャラの名前を
+ * プロンプトに出さないという情報遮断原則を守るため。不参加キャラは発言しないので、
+ * リストから漏れても「知らない前提」の判定には影響しない)。
  */
-function buildSummarySection(summaries: Summary[], includedIds: Set<string>): string | null {
+function buildSummarySection(
+  summaries: Summary[],
+  includedIds: Set<string>,
+  includedMembers: RoomMemberInfo[],
+): string | null {
+  const nameById = new Map(includedMembers.map((m) => [m.character.id, m.character.name]));
+
   const relevant = summaries
     .filter(
       (s) => s.presentCharacterIds.length === 0 || s.presentCharacterIds.some((id) => includedIds.has(id)),
@@ -554,9 +568,27 @@ function buildSummarySection(summaries: Summary[], includedIds: Set<string>): st
 
   if (relevant.length === 0) return null;
 
+  const annotated = relevant.map((s) => {
+    const presentNames = s.presentCharacterIds
+      .filter((id) => includedIds.has(id))
+      .map((id) => nameById.get(id))
+      .filter((name): name is string => !!name);
+    return { text: s.text, presentNames };
+  });
+
   const lines = ["## これまでの会話の要約(古い順)"];
-  relevant.forEach((s, i) => {
-    lines.push(`${i + 1}. ${s.text}`);
+  if (annotated.some((s) => s.presentNames.length > 0)) {
+    lines.push(
+      "(各要約末尾の「その場にいた」は、その期間に同席していたキャラクター。そこに載っていない" +
+        "キャラクターは、その期間の出来事・会話の内容(打ち明けられた秘密など)を知らない前提で" +
+        "振る舞うこと。ただし、後から本人に伝えられた・別の場面で知ったという描写が記憶やログに" +
+        "ある場合はその限りではない)",
+    );
+  }
+  annotated.forEach((s, i) => {
+    const suffix =
+      s.presentNames.length > 0 ? `(その場にいた: ${s.presentNames.join("、")})` : "";
+    lines.push(`${i + 1}. ${s.text}${suffix}`);
   });
   return lines.join("\n");
 }
