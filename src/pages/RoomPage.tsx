@@ -29,7 +29,7 @@ import {
   MemberDetailModal,
   type MemberDetailTab,
 } from "../components/room/MemberDetailModal";
-import type { GameStatChange, Memory, Message, Presence, RoomCharacterOverrides } from "../types";
+import type { GameStatChange, Memory, Message, Presence, RoomCharacterOverrides, Summary } from "../types";
 import { resolveChatFontSize, resolveChatTheme, resolveGameMode } from "../types";
 import {
   deleteLogAndSummary,
@@ -39,7 +39,7 @@ import {
   resetRoomConversationData,
   rewindTo,
 } from "../lib/messages";
-import { listMemories, updateMemory } from "../lib/memories";
+import { deleteSummary, listMemories, listSummaries, updateMemory } from "../lib/memories";
 import { computeCurrentStats, listStatChanges } from "../lib/gameStats";
 import { exportRoomToFile } from "../lib/exportImport";
 import { loadAppSettings, saveAppSettings, saveLastRoomId } from "../lib/settings";
@@ -98,6 +98,9 @@ export function RoomPage() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [memories, setMemories] = useState<Memory[]>([]);
+  // 要約の内容確認・個別削除(機能追加): セーフティブロックの原因調査のため、
+  // プロンプトに実際に載っている要約テキストを見て、該当分だけ消せるようにする。
+  const [summaries, setSummaries] = useState<Summary[]>([]);
   // ゲームモードのステータス変動ログ(機能追加)。gameStatChangesテーブルから読み込み、
   // チャット内の変動行・サイドパネルのゲージ表示に使う。
   const [statChanges, setStatChanges] = useState<GameStatChange[]>([]);
@@ -191,14 +194,16 @@ export function RoomPage() {
 
   const reload = useCallback(async () => {
     if (!id) return;
-    const [msgs, mems, changes] = await Promise.all([
+    const [msgs, mems, changes, sums] = await Promise.all([
       listMessages(id),
       listMemories(id),
       listStatChanges(id),
+      listSummaries(id),
     ]);
     setMessages(msgs);
     setMemories(mems);
     setStatChanges(changes);
+    setSummaries(sums);
   }, [id]);
 
   useEffect(() => {
@@ -735,11 +740,16 @@ export function RoomPage() {
         roomId={room.id}
         members={members}
         memories={memories}
+        summaries={summaries}
         hasMessages={messages.length > 0}
         gameMode={gameMode}
         gameStats={gameStats}
         onChangePresence={handleChangePresence}
         onMemoriesChanged={() => void reload()}
+        onDeleteSummary={async (summaryId) => {
+          await deleteSummary(summaryId);
+          await reload();
+        }}
         onEditOverrides={(characterId) => setMemberDetail({ characterId, tab: "overrides" })}
         onManualOrganize={handleManualOrganize}
       />

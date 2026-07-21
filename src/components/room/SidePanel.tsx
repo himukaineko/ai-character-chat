@@ -9,6 +9,7 @@ import type {
   MemoryType,
   Presence,
   RoomCharacterState,
+  Summary,
 } from "../../types";
 import { CharacterAvatar } from "../CharacterAvatar";
 import { ConfirmDialog } from "../ConfirmDialog";
@@ -28,6 +29,12 @@ interface SidePanelProps {
   roomId: string;
   members: { character: Character; state: RoomCharacterState }[];
   memories: Memory[];
+  /**
+   * 機能追加: 要約の内容確認・個別削除。
+   * 会話生成プロンプトに実際に載る要約テキストをそのまま見せることで、
+   * セーフティフィルタでブロックされたとき「要約側が原因か」を切り分けられるようにする。
+   */
+  summaries: Summary[];
   /** 会話が1件でもあるか(手動整理ボタンの有効/無効判定に使う) */
   hasMessages: boolean;
   /**
@@ -48,6 +55,8 @@ interface SidePanelProps {
    * 失敗時はLLMError等をそのまま投げる(ここで日本語エラー表示に変換する)。
    */
   onManualOrganize: () => Promise<SummarizeOutcome | null>;
+  /** 要約1件を削除する(親側でDB操作+再読込まで行う) */
+  onDeleteSummary: (summaryId: string) => Promise<void>;
 }
 
 const presenceOptions: { value: Presence; label: string }[] = [
@@ -62,6 +71,7 @@ export function SidePanel({
   roomId,
   members,
   memories,
+  summaries,
   hasMessages,
   gameMode,
   gameStats,
@@ -69,10 +79,12 @@ export function SidePanel({
   onMemoriesChanged,
   onEditOverrides,
   onManualOrganize,
+  onDeleteSummary,
 }: SidePanelProps) {
   const [tab, setTab] = useState<"members" | "memory">("members");
   const [deleteTarget, setDeleteTarget] = useState<Memory | null>(null);
   const [promoteTarget, setPromoteTarget] = useState<Memory | null>(null);
+  const [deleteSummaryTarget, setDeleteSummaryTarget] = useState<Summary | null>(null);
 
   // 手動整理(「記憶を整理」ボタン)の実行状態・フィードバック
   const [organizing, setOrganizing] = useState(false);
@@ -95,6 +107,14 @@ export function SidePanel({
     setDeleteTarget(null);
     onMemoriesChanged();
   };
+
+  const handleDeleteSummary = async () => {
+    if (!deleteSummaryTarget) return;
+    await onDeleteSummary(deleteSummaryTarget.id);
+    setDeleteSummaryTarget(null);
+  };
+
+  const nameById = new Map(members.map((m) => [m.character.id, m.character.name]));
 
   /** 「記憶を整理」ボタン: 手動で今すぐ要約+記憶抽出を実行する */
   const handleOrganize = async () => {
@@ -290,6 +310,52 @@ export function SidePanel({
                 )}
               </div>
 
+              {/* 要約の内容確認・個別削除(機能追加): セーフティブロックの原因調査用に、
+                  会話生成プロンプトに実際に載る要約テキストをそのまま見せる */}
+              <div>
+                <h3 className="mb-1 text-sm font-semibold text-[var(--chat-button-text,#d4d4d8)]">
+                  会話の要約
+                </h3>
+                <p className="mb-1.5 text-[11px] text-[var(--chat-placeholder-text,#71717a)]">
+                  古い会話は自動でここに要約され、会話生成のたびにAIへ渡されます。ブロックの原因調査などで、個別に削除することもできます。
+                </p>
+                {summaries.length === 0 ? (
+                  <p className="text-xs text-[var(--chat-placeholder-text,#52525b)]">まだありません。</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {summaries.map((s) => {
+                      const presentNames = s.presentCharacterIds
+                        .map((id) => nameById.get(id))
+                        .filter((name): name is string => !!name);
+                      return (
+                        <li
+                          key={s.id}
+                          className="rounded-md border border-[var(--chat-border,#27272a)] bg-[var(--chat-input-bg,#18181b)] px-2 py-1.5 text-xs"
+                        >
+                          <p className="whitespace-pre-wrap text-[var(--chat-button-text,#d4d4d8)]">
+                            {s.text}
+                          </p>
+                          {presentNames.length > 0 && (
+                            <p className="mt-1 text-[10px] text-[var(--chat-placeholder-text,#52525b)]">
+                              その場にいた: {presentNames.join("、")}
+                            </p>
+                          )}
+                          <div className="mt-1 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => setDeleteSummaryTarget(s)}
+                              className="rounded border border-[var(--chat-button-border,#3f3f46)] px-1.5 py-0.5 text-[10px] text-[var(--chat-danger-text,#f87171)] hover:bg-red-500/10"
+                            >
+                              削除
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+
               <MemorySection
                 title="事実"
                 memories={facts}
@@ -318,6 +384,15 @@ export function SidePanel({
         confirmLabel="削除する"
         onCancel={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={deleteSummaryTarget !== null}
+        title="この要約を削除しますか?"
+        message="この要約を完全に削除します(元の会話ログ・記憶は消えません)。この操作は取り消せません。"
+        confirmLabel="削除する"
+        onCancel={() => setDeleteSummaryTarget(null)}
+        onConfirm={handleDeleteSummary}
       />
 
       {promoteTarget && (

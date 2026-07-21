@@ -131,6 +131,15 @@ export async function listSummaries(roomId: string): Promise<Summary[]> {
 }
 
 /**
+ * 要約を1件削除する(機能追加: 要約の内容確認・個別削除)。
+ * セーフティフィルタのブロック原因が特定の要約にあると判明した場合など、
+ * 該当の要約だけをプロンプトから外したいときに使う。元発言のログ・記憶は消えない。
+ */
+export async function deleteSummary(id: string): Promise<void> {
+  await db.summaries.delete(id);
+}
+
+/**
  * 指定した発言ID群を出どころに持つ記憶をすべて disabled にする(物理削除はしない)。
  * 仕様書6.5「ここまで戻る」で発言が削除されたときの連動処理。
  * db.transaction の中から呼ばれる想定(トランザクションはこの関数の外側で開始する)。
