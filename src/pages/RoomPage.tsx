@@ -39,7 +39,7 @@ import {
   resetRoomConversationData,
   rewindTo,
 } from "../lib/messages";
-import { deleteSummary, listMemories, listSummaries, updateMemory } from "../lib/memories";
+import { deleteSummary, listMemories, listSummaries, updateMemory, updateSummary } from "../lib/memories";
 import { computeCurrentStats, listStatChanges } from "../lib/gameStats";
 import { exportRoomToFile } from "../lib/exportImport";
 import { loadAppSettings, saveAppSettings, saveLastRoomId } from "../lib/settings";
@@ -748,6 +748,10 @@ export function RoomPage() {
         onMemoriesChanged={() => void reload()}
         onDeleteSummary={async (summaryId) => {
           await deleteSummary(summaryId);
+          await reload();
+        }}
+        onUpdateSummary={async (summaryId, text) => {
+          await updateSummary(summaryId, text);
           await reload();
         }}
         onEditOverrides={(characterId) => setMemberDetail({ characterId, tab: "overrides" })}

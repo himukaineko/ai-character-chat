@@ -140,6 +140,15 @@ export async function deleteSummary(id: string): Promise<void> {
 }
 
 /**
+ * 要約の本文を編集する(機能追加: 要約の内容編集)。
+ * セーフティフィルタに引っかかりやすい露骨な表現だけを穏当な言葉に書き換えたいが、
+ * 出来事自体(記憶)は残したい、という用途を想定する。削除と違い会話の文脈は保たれる。
+ */
+export async function updateSummary(id: string, text: string): Promise<void> {
+  await db.summaries.update(id, { text });
+}
+
+/**
  * 指定した発言ID群を出どころに持つ記憶をすべて disabled にする(物理削除はしない)。
  * 仕様書6.5「ここまで戻る」で発言が削除されたときの連動処理。
  * db.transaction の中から呼ばれる想定(トランザクションはこの関数の外側で開始する)。

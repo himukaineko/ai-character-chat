@@ -1,6 +1,6 @@
 // 右スライドオーバー(仕様書10.2)
 // タブ2つ: 「メンバー」(参加状態一括管理)と「記憶」(fact/relationshipの一覧、編集・削除・固定・キャラ設定に昇格)。
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type {
   Character,
@@ -57,6 +57,12 @@ interface SidePanelProps {
   onManualOrganize: () => Promise<SummarizeOutcome | null>;
   /** 要約1件を削除する(親側でDB操作+再読込まで行う) */
   onDeleteSummary: (summaryId: string) => Promise<void>;
+  /**
+   * 要約1件の本文を編集する(機能追加)。
+   * セーフティフィルタに引っかかりやすい表現だけを穏当な言葉に書き換えつつ、
+   * 出来事(記憶)自体は残したい、という削除より柔らかい対処のために使う。
+   */
+  onUpdateSummary: (summaryId: string, text: string) => Promise<void>;
 }
 
 const presenceOptions: { value: Presence; label: string }[] = [
@@ -80,6 +86,7 @@ export function SidePanel({
   onEditOverrides,
   onManualOrganize,
   onDeleteSummary,
+  onUpdateSummary,
 }: SidePanelProps) {
   const [tab, setTab] = useState<"members" | "memory">("members");
   const [deleteTarget, setDeleteTarget] = useState<Memory | null>(null);
@@ -310,68 +317,50 @@ export function SidePanel({
                 )}
               </div>
 
-              {/* 要約の内容確認・個別削除(機能追加): セーフティブロックの原因調査用に、
-                  会話生成プロンプトに実際に載る要約テキストをそのまま見せる */}
-              <div>
-                <h3 className="mb-1 text-sm font-semibold text-[var(--chat-button-text,#d4d4d8)]">
-                  会話の要約
-                </h3>
+              {/* 要約の内容確認・個別編集・削除(機能追加): セーフティブロックの原因調査用に、
+                  会話生成プロンプトに実際に載る要約テキストをそのまま見せる。
+                  縦に長くなりすぎないよう、事実・関係性と同様に折りたたみにする */}
+              <CollapsibleSection title="会話の要約" count={summaries.length}>
                 <p className="mb-1.5 text-[11px] text-[var(--chat-placeholder-text,#71717a)]">
-                  古い会話は自動でここに要約され、会話生成のたびにAIへ渡されます。ブロックの原因調査などで、個別に削除することもできます。
+                  古い会話は自動でここに要約され、会話生成のたびにAIへ渡されます。ブロックの原因調査用に、露骨な表現だけ書き換えたり、丸ごと削除したりできます。
                 </p>
                 {summaries.length === 0 ? (
                   <p className="text-xs text-[var(--chat-placeholder-text,#52525b)]">まだありません。</p>
                 ) : (
                   <ul className="space-y-1.5">
-                    {summaries.map((s) => {
-                      const presentNames = s.presentCharacterIds
-                        .map((id) => nameById.get(id))
-                        .filter((name): name is string => !!name);
-                      return (
-                        <li
-                          key={s.id}
-                          className="rounded-md border border-[var(--chat-border,#27272a)] bg-[var(--chat-input-bg,#18181b)] px-2 py-1.5 text-xs"
-                        >
-                          <p className="whitespace-pre-wrap text-[var(--chat-button-text,#d4d4d8)]">
-                            {s.text}
-                          </p>
-                          {presentNames.length > 0 && (
-                            <p className="mt-1 text-[10px] text-[var(--chat-placeholder-text,#52525b)]">
-                              その場にいた: {presentNames.join("、")}
-                            </p>
-                          )}
-                          <div className="mt-1 flex justify-end">
-                            <button
-                              type="button"
-                              onClick={() => setDeleteSummaryTarget(s)}
-                              className="rounded border border-[var(--chat-button-border,#3f3f46)] px-1.5 py-0.5 text-[10px] text-[var(--chat-danger-text,#f87171)] hover:bg-red-500/10"
-                            >
-                              削除
-                            </button>
-                          </div>
-                        </li>
-                      );
-                    })}
+                    {summaries.map((s) => (
+                      <SummaryRow
+                        key={s.id}
+                        summary={s}
+                        presentNames={s.presentCharacterIds
+                          .map((id) => nameById.get(id))
+                          .filter((name): name is string => !!name)}
+                        onSave={(text) => onUpdateSummary(s.id, text)}
+                        onDelete={() => setDeleteSummaryTarget(s)}
+                      />
+                    ))}
                   </ul>
                 )}
-              </div>
+              </CollapsibleSection>
 
-              <MemorySection
-                title="事実"
-                memories={facts}
-                members={members}
-                onChanged={onMemoriesChanged}
-                onDelete={setDeleteTarget}
-                onPromote={setPromoteTarget}
-              />
-              <MemorySection
-                title="関係性"
-                memories={relationships}
-                members={members}
-                onChanged={onMemoriesChanged}
-                onDelete={setDeleteTarget}
-                onPromote={setPromoteTarget}
-              />
+              <CollapsibleSection title="事実" count={facts.length}>
+                <MemorySection
+                  memories={facts}
+                  members={members}
+                  onChanged={onMemoriesChanged}
+                  onDelete={setDeleteTarget}
+                  onPromote={setPromoteTarget}
+                />
+              </CollapsibleSection>
+              <CollapsibleSection title="関係性" count={relationships.length}>
+                <MemorySection
+                  memories={relationships}
+                  members={members}
+                  onChanged={onMemoriesChanged}
+                  onDelete={setDeleteTarget}
+                  onPromote={setPromoteTarget}
+                />
+              </CollapsibleSection>
             </div>
           )}
         </div>
@@ -407,6 +396,39 @@ export function SidePanel({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * 記憶タブの各セクション(要約/事実/関係性)用の折りたたみ(機能追加)。
+ * 3セクション分を常時全展開すると縦にかなり長くなるという指摘を受け、
+ * ネイティブのdetails/summaryでデフォルト閉じ・タップで開閉できるようにする。
+ * 見出しに件数を添えて、開かなくても中身の有無が分かるようにする。
+ */
+function CollapsibleSection({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: ReactNode;
+}) {
+  return (
+    <details className="group rounded-md border border-[var(--chat-border,#27272a)]">
+      <summary className="flex cursor-pointer list-none items-center justify-between px-2 py-1.5 text-sm font-semibold text-[var(--chat-button-text,#d4d4d8)] [&::-webkit-details-marker]:hidden">
+        <span>
+          {title}
+          <span className="ml-1.5 text-xs font-normal text-[var(--chat-placeholder-text,#71717a)]">
+            ({count})
+          </span>
+        </span>
+        <span className="text-xs text-[var(--chat-placeholder-text,#71717a)] transition-transform group-open:rotate-180">
+          ▼
+        </span>
+      </summary>
+      <div className="px-2 pb-2 pt-1">{children}</div>
+    </details>
   );
 }
 
@@ -454,16 +476,14 @@ function GameStatGauges({
   );
 }
 
-/** 記憶一覧のセクション(事実 / 関係性) */
+/** 記憶一覧(事実 / 関係性。見出しは呼び出し側のCollapsibleSectionが表示する) */
 function MemorySection({
-  title,
   memories,
   members,
   onChanged,
   onDelete,
   onPromote,
 }: {
-  title: string;
   memories: Memory[];
   members: { character: Character; state: RoomCharacterState }[];
   onChanged: () => void;
@@ -472,7 +492,6 @@ function MemorySection({
 }) {
   return (
     <div>
-      <h3 className="mb-1 text-sm font-semibold text-[var(--chat-button-text,#d4d4d8)]">{title}</h3>
       {memories.length === 0 ? (
         <p className="text-xs text-[var(--chat-placeholder-text,#52525b)]">まだありません。</p>
       ) : (
@@ -490,6 +509,102 @@ function MemorySection({
         </ul>
       )}
     </div>
+  );
+}
+
+/**
+ * 要約1件の行(内容表示+編集・削除、機能追加)。
+ * 露骨な表現だけを穏当な言葉に書き換えたいが出来事(記憶)自体は残したい、
+ * という削除より柔らかい対処ができるよう、記憶の編集と同じインライン編集パターンにする。
+ */
+function SummaryRow({
+  summary,
+  presentNames,
+  onSave,
+  onDelete,
+}: {
+  summary: Summary;
+  presentNames: string[];
+  onSave: (text: string) => Promise<void>;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(summary.text);
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    try {
+      await onSave(trimmed);
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <li className="rounded-md border border-[var(--chat-border,#27272a)] bg-[var(--chat-input-bg,#18181b)] px-2 py-1.5 text-xs">
+      {editing ? (
+        <div>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={4}
+            className="w-full resize-none rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-surface,#27272a)] px-2 py-1 text-xs text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
+          />
+          <div className="mt-1 flex justify-end gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setEditing(false);
+                setDraft(summary.text);
+              }}
+              className="rounded px-2 py-0.5 text-[var(--chat-placeholder-text,#71717a)] hover:text-[var(--chat-button-text,#d4d4d8)]"
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              disabled={!draft.trim() || saving}
+              onClick={() => void handleSave()}
+              className="rounded bg-indigo-600 px-2 py-0.5 text-white hover:bg-indigo-500 disabled:opacity-50"
+            >
+              {saving ? "保存中…" : "保存"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="whitespace-pre-wrap text-[var(--chat-button-text,#d4d4d8)]">{summary.text}</p>
+          {presentNames.length > 0 && (
+            <p className="mt-1 text-[10px] text-[var(--chat-placeholder-text,#52525b)]">
+              その場にいた: {presentNames.join("、")}
+            </p>
+          )}
+          <div className="mt-1 flex justify-end gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(summary.text);
+                setEditing(true);
+              }}
+              className="rounded border border-[var(--chat-button-border,#3f3f46)] px-1.5 py-0.5 text-[10px] text-[var(--chat-muted-text,#a1a1aa)] hover:bg-[var(--chat-surface,#27272a)]"
+            >
+              編集
+            </button>
+            <button
+              type="button"
+              onClick={onDelete}
+              className="rounded border border-[var(--chat-button-border,#3f3f46)] px-1.5 py-0.5 text-[10px] text-[var(--chat-danger-text,#f87171)] hover:bg-red-500/10"
+            >
+              削除
+            </button>
+          </div>
+        </>
+      )}
+    </li>
   );
 }
 
