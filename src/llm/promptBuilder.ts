@@ -71,10 +71,17 @@ const NARRATION_INSTRUCTIONS: Record<NarrationLevel, string> = {
  * 返事の長さの指示。セリフ・ナレーション両方の長さに効くよう文面を調整する。
  * "normal" は現状どおり(指示なし)。
  */
+/**
+ * 返事の長さ(機能追加)。あくまでキャラのセリフ(dialogue)の詳しさ・分量についての指示であり、
+ * 地の文(narration)を出す・出さない/どれだけ出すかはナレーションレベル(NarrationLevel)側だけの
+ * 責務にする。以前はここでも「地の文も最小限に」のように地の文へ言及していたため、
+ * ナレーションレベルの指示(例: light「たまに地の文を挟む」)と競合し、返事の長さをshortにすると
+ * 地の文自体が消えてしまう不具合があった。
+ */
 const REPLY_LENGTH_INSTRUCTIONS: Record<ReplyLength, string> = {
-  short: "各発言は1〜2文程度の短いテンポにしてください。セリフは簡潔に、地の文も最小限に留めてください。",
+  short: "各キャラクターのセリフ(dialogue)は1〜2文程度の短いテンポで、簡潔にしてください。",
   normal: "",
-  long: "各発言はやや長めに、感情や思考の描写も含めてじっくり書いてください。セリフも地の文も丁寧に描写してください。",
+  long: "各キャラクターのセリフ(dialogue)はやや長めに、感情や思考を言葉に乗せてじっくり書いてください。",
 };
 
 export interface PromptBuildParams {
@@ -263,9 +270,9 @@ function narrationLevelLabel(level: NarrationLevel): string {
  * 「必ず守るべき指示」であることが伝わる言い回しにする。normalは既定なので特に触れない。
  */
 const REPLY_LENGTH_SYSTEM_INSTRUCTIONS: Record<ReplyLength, string> = {
-  short: "各発言は1〜2文程度の短いテンポを守ってください。セリフは簡潔に、地の文も最小限に留めること。",
+  short: "各キャラクターのセリフ(dialogue)は1〜2文程度の短いテンポを守り、簡潔にすること。",
   normal: "",
-  long: "各発言はやや長めに、感情や思考の描写も含めてじっくり書いてください。セリフも地の文も丁寧に描写すること。",
+  long: "各キャラクターのセリフ(dialogue)はやや長めに、感情や思考を言葉に乗せてじっくり書くこと。",
 };
 
 function buildSystemInstruction(
