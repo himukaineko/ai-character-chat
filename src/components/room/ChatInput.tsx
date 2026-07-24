@@ -12,10 +12,14 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { RegenerateOption } from "../../llm/promptBuilder";
 import { AUTO_GENERATE_COUNT_OPTIONS, AUTO_GENERATE_DEFAULT_COUNT } from "../../lib/autoGenerate";
 import { RegenerateMenu } from "./RegenerateMenu";
+import { requestInputSuggestions } from "../../llm/suggestionService";
+import { LLMError, LLM_ERROR_MESSAGES } from "../../llm/types";
 
 export type InputMode = "topic" | "message";
 
 interface ChatInputProps {
+  /** 発言・トピックの提案補助(機能追加)に必要。requestInputSuggestions の呼び出しに使う */
+  roomId: string;
   generating: boolean;
   canRegenerate: boolean;
   canUndo: boolean;
@@ -46,6 +50,7 @@ interface ChatInputProps {
 }
 
 export function ChatInput({
+  roomId,
   generating,
   canRegenerate,
   canUndo,
@@ -71,6 +76,12 @@ export function ChatInput({
   // モバイル用「⋯」オプション行の開閉(元に戻す/再生成/自動生成をここにまとめる)
   const [mobileOptionsOpen, setMobileOptionsOpen] = useState(false);
 
+  // 発言・トピックの提案補助(機能追加): 何を送ればいいか迷ったときにAIへ候補を出させる。
+  // 候補は入力欄に流し込むだけで送信はしない(送信は必ずユーザー自身の操作で行う)。
+  const [suggestions, setSuggestions] = useState<string[] | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
+
   // 入力内容に応じて1行分の高さから数行まで自動で伸びるようにする(上限はCSSのmax-hで制御)
   useEffect(() => {
     const el = textareaRef.current;
@@ -85,6 +96,8 @@ export function ChatInput({
     if (!prefill) return;
     setMode(prefill.mode);
     setDraft(prefill.text);
+    setSuggestions(null);
+    setSuggestError(null);
     textareaRef.current?.focus();
     onPrefillConsumed();
   }, [prefill, onPrefillConsumed]);
@@ -102,34 +115,92 @@ export function ChatInput({
       onSubmitMessage(text);
     }
     setDraft("");
+    setSuggestions(null);
+    setSuggestError(null);
+  };
+
+  /** モード(トピック/発言)切替: 古いモードの提案候補が残って混乱しないようクリアする */
+  const handleChangeMode = (next: InputMode) => {
+    setMode(next);
+    setSuggestions(null);
+    setSuggestError(null);
+  };
+
+  /** 提案ボタン: 現在のモードに応じて発言/トピックの候補をAIに3つ出させる */
+  const handleRequestSuggestions = async () => {
+    setSuggesting(true);
+    setSuggestError(null);
+    setSuggestions(null);
+    try {
+      const result = await requestInputSuggestions(roomId, mode);
+      if (result.length === 0) {
+        setSuggestError("AIが候補を生成できませんでした。もう一度お試しください。");
+      } else {
+        setSuggestions(result);
+      }
+    } catch (err) {
+      if (err instanceof LLMError) {
+        setSuggestError(err.message || LLM_ERROR_MESSAGES[err.kind]);
+      } else {
+        setSuggestError(err instanceof Error ? err.message : "候補の取得に失敗しました。");
+      }
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  /** 候補をタップ: 入力欄に流し込むだけで送信はしない(送信はユーザー自身の操作) */
+  const handlePickSuggestion = (text: string) => {
+    setDraft(text);
+    setSuggestions(null);
+    setSuggestError(null);
+    textareaRef.current?.focus();
   };
 
   return (
     <div className="border-t border-[var(--chat-border)] bg-[var(--chat-surface)] pt-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        {/* トピック/発言 切替セグメント */}
-        <div className="inline-flex rounded-md border border-[var(--chat-button-border)] p-0.5 text-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* トピック/発言 切替セグメント */}
+          <div className="inline-flex rounded-md border border-[var(--chat-button-border)] p-0.5 text-sm">
+            <button
+              type="button"
+              onClick={() => handleChangeMode("topic")}
+              className={`rounded px-3 py-1 ${
+                mode === "topic"
+                  ? "bg-indigo-600 text-white"
+                  : "text-[var(--chat-placeholder-text)] hover:text-[var(--chat-button-text)]"
+              }`}
+            >
+              トピック
+            </button>
+            <button
+              type="button"
+              onClick={() => handleChangeMode("message")}
+              className={`rounded px-3 py-1 ${
+                mode === "message"
+                  ? "bg-indigo-600 text-white"
+                  : "text-[var(--chat-placeholder-text)] hover:text-[var(--chat-button-text)]"
+              }`}
+            >
+              発言
+            </button>
+          </div>
+
+          {/* 発言・トピックの提案補助(機能追加): 何を送ればいいか迷ったときにAIへ候補を出させる */}
           <button
             type="button"
-            onClick={() => setMode("topic")}
-            className={`rounded px-3 py-1 ${
-              mode === "topic"
-                ? "bg-indigo-600 text-white"
-                : "text-[var(--chat-placeholder-text)] hover:text-[var(--chat-button-text)]"
-            }`}
+            disabled={busy || !!editing || suggesting}
+            onClick={() => void handleRequestSuggestions()}
+            title="AIに発言・トピックの候補を3つ提案してもらう"
+            className="flex items-center gap-1 rounded-md border border-[var(--chat-button-border)] px-2.5 py-1 text-sm text-[var(--chat-button-text)] hover:bg-[var(--chat-input-bg)] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            トピック
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("message")}
-            className={`rounded px-3 py-1 ${
-              mode === "message"
-                ? "bg-indigo-600 text-white"
-                : "text-[var(--chat-placeholder-text)] hover:text-[var(--chat-button-text)]"
-            }`}
-          >
-            発言
+            {suggesting ? (
+              <span className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : (
+              <span aria-hidden="true">💡</span>
+            )}
+            提案
           </button>
         </div>
 
@@ -279,6 +350,41 @@ export function ChatInput({
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 発言・トピックの提案候補パネル(機能追加): タップした候補は送信されず入力欄に入るだけ */}
+      {(suggestions || suggestError) && (
+        <div className="mb-2 rounded-md border border-indigo-500/40 bg-indigo-500/5 p-2">
+          {suggestError ? (
+            <p className="text-xs text-[var(--chat-danger-text,#f87171)]">{suggestError}</p>
+          ) : (
+            <div className="space-y-1.5">
+              <p className="text-[11px] text-[var(--chat-placeholder-text)]">
+                タップすると入力欄にコピーされます(送信はされません)
+              </p>
+              {suggestions!.map((s, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => handlePickSuggestion(s)}
+                  className="block w-full rounded-md border border-[var(--chat-button-border)] bg-[var(--chat-input-bg)] px-2.5 py-1.5 text-left text-sm text-[var(--chat-button-text)] hover:border-indigo-500 hover:bg-indigo-500/10"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setSuggestions(null);
+              setSuggestError(null);
+            }}
+            className="mt-1.5 text-[11px] text-[var(--chat-placeholder-text)] hover:text-[var(--chat-button-text)]"
+          >
+            閉じる
+          </button>
         </div>
       )}
 

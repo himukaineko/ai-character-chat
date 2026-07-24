@@ -35,8 +35,12 @@ export interface GenerateResult {
   messages: Message[];
 }
 
-/** ルームの生成に必要な文脈をDBからまとめて読み込む */
-async function loadRoomContext(roomId: string) {
+/**
+ * ルームの生成に必要な文脈をDBからまとめて読み込む。
+ * 会話生成本体だけでなく、発言・トピックの提案補助(suggestionService.ts)からも
+ * 同じ文脈組み立てロジックを再利用するため export する。
+ */
+export async function loadRoomContext(roomId: string) {
   const [room, characters, states, memories, summaries, allMessages] = await Promise.all([
     db.rooms.get(roomId),
     db.characters.toArray(),
@@ -69,8 +73,9 @@ async function loadRoomContext(roomId: string) {
  * 機能追加: このルームで使うユーザー設定を決定する。
  * ワールドが紐づいていて、かつそのワールドが専用ユーザー設定を使う設定なら、そちらを優先する。
  * そうでなければ従来どおりグローバル設定(loadUserProfile)を使う。
+ * suggestionService.ts(発言・トピックの提案補助)からも再利用するため export する。
  */
-function resolveRoomUserProfile(world: World | undefined): UserProfile {
+export function resolveRoomUserProfile(world: World | undefined): UserProfile {
   if (world && world.useCustomUserProfile) {
     return world.userProfile;
   }

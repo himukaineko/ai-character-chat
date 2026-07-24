@@ -705,6 +705,7 @@ export function RoomPage() {
 
       {/* 下部入力エリア */}
       <ChatInput
+        roomId={room.id}
         generating={generating}
         canRegenerate={canRegenerate}
         canUndo={canUndo}
