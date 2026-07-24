@@ -18,7 +18,7 @@ import type {
   UserProfile,
   World,
 } from "../types";
-import { resolveReplyLength } from "../types";
+import { CHARACTER_GENDER_OPTIONS, resolveCharacterGender, resolveReplyLength } from "../types";
 import type { BuiltPrompt } from "./types";
 
 export interface RoomMemberInfo {
@@ -321,10 +321,23 @@ function buildSystemInstruction(
   return lines.filter(Boolean).join("\n");
 }
 
+/**
+ * 性別行(機能追加)。未設定("unspecified")のキャラは何も書かない
+ * (分からない情報を無理に断定させないため。人称・呼ばれ方の一貫性の助けとして
+ * 設定されている場合のみプロンプトに載せる)。
+ */
+function characterGenderLine(character: Character): string {
+  const gender = resolveCharacterGender(character.gender);
+  if (gender === "unspecified") return "";
+  const label = CHARACTER_GENDER_OPTIONS.find((o) => o.value === gender)?.label;
+  return label ? `性別: ${label}` : "";
+}
+
 function buildCharacterSection(members: RoomMemberInfo[]): string {
   const blocks = members.map(({ character }) => {
     const lines = [
       `### ${character.name}`,
+      characterGenderLine(character),
       character.nicknames.length > 0 ? `呼び名: ${character.nicknames.join("、")}` : "",
       `一人称: ${character.firstPerson || "(未設定)"} / 二人称: ${character.secondPerson || "(未設定)"}`,
       character.speechStyle ? `口調: ${character.speechStyle}` : "",

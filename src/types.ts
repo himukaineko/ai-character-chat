@@ -8,9 +8,31 @@ export interface SpeechSample {
 }
 
 /** キャラクター(グローバル / ライブラリ) */
+/** キャラの性別(機能追加)。会話生成プロンプトの人称・呼ばれ方の一貫性の助けにする */
+export type CharacterGender = "male" | "female" | "other" | "unspecified";
+
+/** 性別の選択肢と日本語ラベル(フォームのセレクトに使う。unspecifiedは「指定しない」) */
+export const CHARACTER_GENDER_OPTIONS: { value: CharacterGender; label: string }[] = [
+  { value: "unspecified", label: "指定しない" },
+  { value: "male", label: "男性" },
+  { value: "female", label: "女性" },
+  { value: "other", label: "その他" },
+];
+
+/** gender未設定(既存キャラ)の場合は "unspecified" 扱いにする防御的デフォルト */
+export function resolveCharacterGender(gender: CharacterGender | undefined): CharacterGender {
+  return gender ?? "unspecified";
+}
+
 export interface Character {
   id: string; // uuid
   name: string;
+  /**
+   * 性別(機能追加)。追加前に作成された既存キャラはこのフィールドを持たない
+   * (DBマイグレーションは行わない)ため、読み込み側は必ず undefined → "unspecified" として扱うこと。
+   * 直接 character.gender を参照せず resolveCharacterGender() を経由すること。
+   */
+  gender?: CharacterGender;
   nicknames: string[]; // 呼び名・ニックネーム
   firstPerson: string; // 一人称
   secondPerson: string; // 二人称

@@ -12,6 +12,13 @@ import type { InputMode } from "../components/room/ChatInput";
 const RECENT_MESSAGE_COUNT_FOR_SUGGESTION = 15;
 
 /**
+ * 発言モードで一人称・口調を寄せる参考にする、ユーザー自身の過去発言のサンプル数(機能追加)。
+ * 直近ログ(RECENT_MESSAGE_COUNT_FOR_SUGGESTION件)だけだとユーザー発言が少ない/無いことがあるため、
+ * 会話全体からユーザー発言だけを抜き出して別途渡す。
+ */
+const USER_SPEECH_SAMPLE_COUNT = 5;
+
+/**
  * ユーザーの簡単なヒントから、発言/トピックの候補を3つAIに生成させる。
  * mode: "topic" なら次に投入すると面白そうな話題、"message" なら次のユーザー発言の候補を提案する。
  *
@@ -54,6 +61,24 @@ export async function requestInputSuggestions(
       ? recentMessages.map((m) => formatMessageLine(m))
       : ["(まだ会話がありません。これから最初の一言を送るところです)"];
 
+  // 機能追加: 発言モードでは、ユーザー自身の過去の発言から一人称・口調を寄せられるようにする。
+  // 直近ログはキャラの発言と混ざっているため、会話全体からユーザー発言だけを抜き出して別枠で渡す。
+  const userSpeechSamples =
+    mode === "message"
+      ? allMessages
+          .filter((m) => m.type === "user")
+          .slice(-USER_SPEECH_SAMPLE_COUNT)
+          .map((m) => m.text)
+      : [];
+  const userSpeechSampleLines =
+    userSpeechSamples.length > 0
+      ? [
+          "",
+          "## ユーザー自身の過去の発言例(一人称・口調・語尾の癖を必ず参考にすること)",
+          ...userSpeechSamples.map((t) => `- ${t}`),
+        ]
+      : [];
+
   const modeInstruction =
     mode === "topic"
       ? "今の流れ・キャラクター設定・世界観を踏まえて、次にユーザーが投入すると会話が広がりそうな" +
@@ -62,7 +87,11 @@ export async function requestInputSuggestions(
       : "今の会話の流れを踏まえて、ユーザーが次に言うと自然で会話が広がりそうな「発言」を3パターン" +
         "提案してください。ユーザー本人の一人称視点のセリフとして、そのまま発言欄に入力できる形に" +
         "してください。必要なら【 】で行動描写を含めてもよいですが、必須ではありません。" +
-        "3つは方向性を変える(例: 質問する/自分の気持ちを話す/茶化す、など)ようにしてください。";
+        "3つは方向性を変える(例: 質問する/自分の気持ちを話す/茶化す、など)ようにしてください。" +
+        (userSpeechSamples.length > 0
+          ? "上に示した「ユーザー自身の過去の発言例」から一人称(私/僕/俺など)・口調・語尾の癖を" +
+            "読み取り、3つの候補すべてをそれになるべく寄せて自然に続くようにしてください。"
+          : "");
 
   const prompt = [
     "あなたは、AIキャラクター会話アプリでユーザーの入力を手伝うアシスタントです。",
@@ -76,6 +105,7 @@ export async function requestInputSuggestions(
     "",
     "## ユーザーについて",
     userProfileLine || "(特に設定なし)",
+    ...userSpeechSampleLines,
     "",
     "## 直近の会話ログ",
     ...logLines,

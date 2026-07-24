@@ -3,7 +3,7 @@
 // 世界観・キャラ同士の関係込みで一括生成する。characterAssist.ts の命名規則・キャラ立ち指針を
 // そのまま再利用し、単体AI補助と矛盾しないトーンで生成する。
 // ここで返す値はプレビュー画面に流し込むだけで、DBへの自動保存は一切行わない(呼び出し側の責務)。
-import type { RelationDirection, SpeechSample } from "../types";
+import type { RelationDirection, SpeechSample, UserProfile } from "../types";
 import { loadAppSettings } from "../lib/settings";
 import { createLiteLLMClient } from "./createClient";
 import { NAMING_RULES, CHARACTER_DEPTH_GUIDE } from "./characterAssist";
@@ -46,6 +46,12 @@ export interface GroupAssistResult {
   worldDescription: string;
   characters: GroupCharacterDraft[];
   relations: GroupRelationDraft[];
+  /**
+   * 機能追加: ユーザー(主人公)についての言及があった場合のワールド専用ユーザー設定案。
+   * 説明文にユーザーへの言及がなければ undefined(専用設定は提案しない=共通の主人公のまま)。
+   * 呼び出し側でワールド作成時に useCustomUserProfile / userProfile へ流し込むかどうかを判断する。
+   */
+  userProfile?: Partial<UserProfile>;
 }
 
 /**
@@ -129,6 +135,15 @@ export async function requestGroupAssist(
       "どう呼び、どう思っているか。bToAはその逆方向。呼び方が思いつかない・特に決まっていない場合は" +
       "callNameを空文字にしてよいが、attitude(内心・態度)はできるだけ埋めること",
     "",
+    "## ユーザー(主人公)について(重要)",
+    "ユーザーの説明文の中に、主人公(ユーザー)自身についての言及があれば" +
+      "(例:「主人公はこの世界の巫女」「ユーザーは転生者で剣が使える」「あなたは新入生」など)、" +
+      "そのワールド専用のユーザー設定(userProfile)を提案してください。" +
+      "name(呼ばれる名前)/calledAs(呼ばれ方)/treatment(周囲からの扱われ方の希望)/" +
+      "background(この世界での背景・立場)/appearance(外見)のうち、説明文から読み取れる範囲でよく、" +
+      "無理にすべて埋める必要はありません。ユーザーについての言及が説明文の中に特になければ、" +
+      "userProfileはJSONオブジェクトのキーごと省略してください(null・空文字列で埋めて出力しないこと)。",
+    "",
     "## 出力形式",
     "次のJSONオブジェクトのみを出力してください。前置き・説明文・コードブロック記号(```)は一切不要です。",
     "relationsのaIndex/bIndexには、characters配列の0始まりのインデックスを指定してください。",
@@ -148,7 +163,9 @@ export async function requestGroupAssist(
     '      "aToB": { "callName": "aIndexのキャラがbIndexのキャラを呼ぶ呼び方", "attitude": "aIndexのキャラのbIndexのキャラへの態度・感情" },',
     '      "bToA": { "callName": "bIndexのキャラがaIndexのキャラを呼ぶ呼び方", "attitude": "bIndexのキャラのaIndexのキャラへの態度・感情" }',
     "    }",
-    "  ]",
+    "  ],",
+    '  "userProfile": { "name": "文字列", "calledAs": "文字列", "treatment": "文字列", "background": "文字列", "appearance": "文字列" }' +
+      "  (ユーザーへの言及が説明文になければ、このキー自体を省略してよい)",
     "}",
   ].join("\n");
 
@@ -211,8 +228,30 @@ function parseGroupAssistResponse(raw: string): GroupAssistResult {
   const worldName = typeof parsed.worldName === "string" ? parsed.worldName.trim() : "";
   const worldDescription =
     typeof parsed.worldDescription === "string" ? parsed.worldDescription.trim() : "";
+  const userProfile = normalizeUserProfileDraft(parsed.userProfile);
 
-  return { worldName, worldDescription, characters, relations };
+  return { worldName, worldDescription, characters, relations, userProfile };
+}
+
+/**
+ * AI応答内のuserProfile(ワールド専用ユーザー設定案)を正規化する。
+ * オブジェクトでない場合や、全フィールドが空の場合は undefined
+ * (=ユーザーへの言及が無かった・専用設定を提案しなかったとみなす)。
+ */
+function normalizeUserProfileDraft(v: unknown): Partial<UserProfile> | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const obj = v as Record<string, unknown>;
+  const str = (key: string): string =>
+    typeof obj[key] === "string" ? (obj[key] as string).trim() : "";
+  const profile: Partial<UserProfile> = {
+    name: str("name"),
+    calledAs: str("calledAs"),
+    treatment: str("treatment"),
+    background: str("background"),
+    appearance: str("appearance"),
+  };
+  const hasContent = Object.values(profile).some((s) => s !== "");
+  return hasContent ? profile : undefined;
 }
 
 /**

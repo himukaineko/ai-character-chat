@@ -7,7 +7,7 @@ import { useAppStore } from "../store";
 import type { CharacterInput } from "../lib/characters";
 import type { WorldInput } from "../lib/worlds";
 import { defaultUserProfile } from "../lib/settings";
-import type { RelationDirection } from "../types";
+import type { RelationDirection, UserProfile } from "../types";
 import {
   requestGroupAssist,
   GroupAssistParseError,
@@ -75,6 +75,9 @@ export function GroupAssistModal({ open, onClose, onCreated }: GroupAssistModalP
   // ---- プレビューステップ(その場で編集できるドラフト) ----
   const [result, setResult] = useState<GroupAssistResult>(emptyResult());
   const [createWorldFlag, setCreateWorldFlag] = useState(true);
+  // 機能追加: AIが提案したワールド専用ユーザー設定(result.userProfile)を実際に使うかどうか。
+  // 提案された場合のみ表示され、デフォルトはON(説明文にユーザーへの言及があった=使いたい意図が強いため)
+  const [useGeneratedProfile, setUseGeneratedProfile] = useState(true);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -86,6 +89,7 @@ export function GroupAssistModal({ open, onClose, onCreated }: GroupAssistModalP
     setGenerateError(null);
     setResult(emptyResult());
     setCreateWorldFlag(true);
+    setUseGeneratedProfile(true);
     setCreating(false);
     setCreateError(null);
   };
@@ -111,6 +115,7 @@ export function GroupAssistModal({ open, onClose, onCreated }: GroupAssistModalP
       const generated = await requestGroupAssist(description, memberCount);
       setResult(generated);
       setCreateWorldFlag(true);
+      setUseGeneratedProfile(!!generated.userProfile);
       setStep("preview");
     } catch (err) {
       setGenerateError(describeError(err));
@@ -157,6 +162,11 @@ export function GroupAssistModal({ open, onClose, onCreated }: GroupAssistModalP
   };
 
   const charName = (index: number) => result.characters[index]?.name.trim() || "(名称未設定)";
+
+  /** 機能追加: AI提案のワールド専用ユーザー設定(userProfile)のフィールド単位編集 */
+  const updateUserProfileField = (field: keyof UserProfile, value: string) => {
+    setResult((r) => (r.userProfile ? { ...r, userProfile: { ...r.userProfile, [field]: value } } : r));
+  };
 
   const characterInputFromDraft = (draft: GroupCharacterDraft): CharacterInput => ({
     name: draft.name.trim(),
@@ -229,8 +239,13 @@ export function GroupAssistModal({ open, onClose, onCreated }: GroupAssistModalP
             aToB: directionOrUndefined(r.aToB),
             bToA: directionOrUndefined(r.bToA),
           })),
-        useCustomUserProfile: false,
-        userProfile: defaultUserProfile(),
+        // 機能追加: AIがユーザー(主人公)への言及から専用ユーザー設定を提案し、
+        // それを使う選択がされている場合はそのまま反映する。それ以外は従来どおり共通の主人公のまま
+        useCustomUserProfile: !!(result.userProfile && useGeneratedProfile),
+        userProfile:
+          result.userProfile && useGeneratedProfile
+            ? { ...defaultUserProfile(), ...result.userProfile }
+            : defaultUserProfile(),
       };
       const world = await addWorld(worldInput);
       setCreating(false);
@@ -481,6 +496,80 @@ export function GroupAssistModal({ open, onClose, onCreated }: GroupAssistModalP
                       className="w-full resize-none rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
                     />
                   </div>
+
+                  {/* 機能追加: AIがユーザー(主人公)への言及から専用ユーザー設定を提案した場合のみ表示 */}
+                  {result.userProfile && (
+                    <div className="space-y-2 border-t border-zinc-700 pt-2">
+                      <label className="flex items-center gap-2 text-sm text-zinc-200">
+                        <input
+                          type="checkbox"
+                          checked={useGeneratedProfile}
+                          onChange={(e) => setUseGeneratedProfile(e.target.checked)}
+                          className="accent-indigo-500"
+                        />
+                        このワールド専用のユーザー設定を使う(説明文からAIが提案しました)
+                      </label>
+                      {useGeneratedProfile && (
+                        <div className="space-y-2 pt-1">
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-zinc-400">
+                              名前
+                            </label>
+                            <input
+                              type="text"
+                              value={result.userProfile.name ?? ""}
+                              onChange={(e) => updateUserProfileField("name", e.target.value)}
+                              className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-zinc-400">
+                              呼ばれ方
+                            </label>
+                            <input
+                              type="text"
+                              value={result.userProfile.calledAs ?? ""}
+                              onChange={(e) => updateUserProfileField("calledAs", e.target.value)}
+                              className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-zinc-400">
+                              扱われ方の希望
+                            </label>
+                            <textarea
+                              value={result.userProfile.treatment ?? ""}
+                              onChange={(e) => updateUserProfileField("treatment", e.target.value)}
+                              rows={2}
+                              className="w-full resize-none rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-zinc-400">
+                              この世界での背景・立場
+                            </label>
+                            <textarea
+                              value={result.userProfile.background ?? ""}
+                              onChange={(e) => updateUserProfileField("background", e.target.value)}
+                              rows={2}
+                              className="w-full resize-none rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs font-medium text-zinc-400">
+                              外見
+                            </label>
+                            <textarea
+                              value={result.userProfile.appearance ?? ""}
+                              onChange={(e) => updateUserProfileField("appearance", e.target.value)}
+                              rows={2}
+                              className="w-full resize-none rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

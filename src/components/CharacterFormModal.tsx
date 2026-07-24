@@ -3,6 +3,7 @@
 // 提案は自動確定しない。フォームに流し込むだけで、保存するかどうかはユーザーが決める。
 import { useEffect, useRef, useState } from "react";
 import type { Character } from "../types";
+import { CHARACTER_GENDER_OPTIONS, resolveCharacterGender } from "../types";
 import type { CharacterInput } from "../lib/characters";
 import { TagInput } from "./TagInput";
 import { SpeechSampleEditor } from "./SpeechSampleEditor";
@@ -27,6 +28,7 @@ interface CharacterFormModalProps {
 function emptyForm(): CharacterInput {
   return {
     name: "",
+    gender: "unspecified",
     nicknames: [],
     firstPerson: "",
     secondPerson: "",
@@ -138,6 +140,36 @@ function TextField({
   );
 }
 
+/** セレクトボックス形式のフィールド(機能追加: 性別選択用)。他の項目と見た目のトーンを揃える */
+function SelectField({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <FieldLabelRow label={label} />
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500"
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function TextAreaField({
   label,
   value,
@@ -194,7 +226,9 @@ export function CharacterFormModal({
     if (!open) return;
     if (character) {
       const { id: _id, createdAt: _c, updatedAt: _u, ...rest } = character;
-      setForm(rest);
+      // 既存キャラはgenderフィールドを持たないことがある(追加前に作成された場合)ため、
+      // フォームのselect表示のためにここで防御的デフォルトを適用しておく
+      setForm({ ...rest, gender: resolveCharacterGender(rest.gender) });
     } else {
       setForm(emptyForm());
     }
@@ -391,6 +425,12 @@ export function CharacterFormModal({
             assisting={isFieldAssisting("name")}
             inputRef={nameInputRef}
             error={nameError ?? undefined}
+          />
+          <SelectField
+            label="性別"
+            value={resolveCharacterGender(form.gender)}
+            options={CHARACTER_GENDER_OPTIONS}
+            onChange={(v) => set("gender", v as Character["gender"])}
           />
           <TagInput
             label="ニックネーム・呼び名"
