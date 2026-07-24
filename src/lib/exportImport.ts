@@ -73,8 +73,11 @@ export interface CharactersOnlyExportData {
  * ワールド単位エクスポートファイルの形式。
  * 所属キャラ・キャラ同士の関係(方向つき情報を含む)を1ファイルにまとめて共有する用途。
  * チャット内容・ルーム・記憶・要約・APIキーは一切含めない。
- * ユーザープロフィールも含めない(共有相手にユーザー個人のペルソナ情報を渡さないため。
- * useCustomUserProfileはfalse、userProfileは空のデフォルト値で書き出す)。
+ * ユーザープロフィールの扱い(機能追加): ワールド専用のユーザー設定(useCustomUserProfile: true)は
+ * そのワールドの世界観・設定の一部としてそのまま含める。共通の主人公(グローバル設定)を
+ * 使っている場合は、それはユーザー本人の個人的なペルソナ情報なので含めない
+ * (useCustomUserProfileはfalse、userProfileは空のデフォルト値で書き出す)。
+ * exportWorldUserProfileFields() でこの判定を行う。
  * formatマーカーで他形式と区別する。
  */
 export interface WorldExportData {
@@ -88,12 +91,28 @@ export interface WorldExportData {
 /**
  * ルームエクスポートに埋め込むワールド情報。
  * スタンドアロンのWorldExportDataから format/version(ファイル種別マーカー)を除いた中身で、
- * ワールド本体+所属キャラを1セットにまとめる。buildWorldExportDataと同様にユーザー個人の
- * ペルソナ情報はサニタイズする(useCustomUserProfile=false、userProfileは空のデフォルト値)。
+ * ワールド本体+所属キャラを1セットにまとめる。ユーザープロフィールの扱いは
+ * buildWorldExportDataと同じ(exportWorldUserProfileFields参照)。
  */
 export interface EmbeddedWorld {
   world: World;
   characters: ExportedCharacter[];
+}
+
+/**
+ * ワールドをエクスポートする際、ユーザープロフィールをどう扱うか決める(機能追加)。
+ * ワールド専用のユーザー設定(useCustomUserProfile: true)は、共通の主人公とは別に
+ * そのワールドだけで使うペルソナであり、世界観の一部として意味を持つためそのまま含める。
+ * 一方、共通の主人公(グローバル設定)を使っている場合、それはユーザー本人の個人的な
+ * ペルソナ情報であり、ワールド固有の情報ではないため、共有相手には渡さず空にする。
+ */
+function exportWorldUserProfileFields(
+  world: World,
+): Pick<World, "useCustomUserProfile" | "userProfile"> {
+  if (world.useCustomUserProfile) {
+    return { useCustomUserProfile: true, userProfile: world.userProfile };
+  }
+  return { useCustomUserProfile: false, userProfile: defaultUserProfile() };
 }
 
 /**
@@ -285,7 +304,8 @@ export async function exportCharactersToFile(characterIds?: string[]): Promise<v
 
 /**
  * ワールド(所属キャラ・キャラ同士の関係込み)をエクスポート用オブジェクトに組み立てる。
- * ユーザープロフィールは含めない(useCustomUserProfile=false、userProfileは空のデフォルト値)。
+ * ユーザープロフィールの扱いは exportWorldUserProfileFields() を参照
+ * (ワールド専用設定は含める、共通の主人公は含めない)。
  */
 export async function buildWorldExportData(worldId: string): Promise<WorldExportData> {
   const world = await db.worlds.get(worldId);
@@ -301,9 +321,7 @@ export async function buildWorldExportData(worldId: string): Promise<WorldExport
     exportedAt: Date.now(),
     world: {
       ...world,
-      // 共有相手にユーザー個人のペルソナ情報を渡さないため、ワールド専用ユーザー設定は書き出さない
-      useCustomUserProfile: false,
-      userProfile: defaultUserProfile(),
+      ...exportWorldUserProfileFields(world),
     },
     characters: await serializeCharacters(targets),
   };
@@ -321,7 +339,8 @@ export async function exportWorldToFile(worldId: string): Promise<void> {
  * ルーム単体エクスポート用オブジェクトを組み立てる。
  * includeLog=falseの場合は会話ログ(messages/summaries/gameStatChanges)を含めない
  * (共有向け。記憶はルームの前提知識として有用なため、ログの有無にかかわらず常に含める)。
- * 紐づくワールドがあれば、buildWorldExportDataと同様にユーザープロフィールをサニタイズして埋め込む。
+ * 紐づくワールドがあれば、buildWorldExportDataと同じ方針(exportWorldUserProfileFields)で
+ * ユーザープロフィールを扱って埋め込む。
  */
 export async function buildRoomExportData(
   roomId: string,
@@ -346,8 +365,7 @@ export async function buildRoomExportData(
     if (w) {
       const worldCharacters = allCharacters.filter((c) => w.characterIds.includes(c.id));
       world = {
-        // 共有相手にユーザー個人のペルソナ情報を渡さないため、ワールド専用ユーザー設定は書き出さない
-        world: { ...w, useCustomUserProfile: false, userProfile: defaultUserProfile() },
+        world: { ...w, ...exportWorldUserProfileFields(w) },
         characters: await serializeCharacters(worldCharacters),
       };
     }
@@ -689,9 +707,9 @@ export async function importWorld(
       characterIdA: characterIdMap.get(r.characterIdA) ?? r.characterIdA,
       characterIdB: characterIdMap.get(r.characterIdB) ?? r.characterIdB,
     })),
-    // 念のため、取り込んだファイルにユーザープロフィールが含まれていても無視する
-    useCustomUserProfile: false,
-    userProfile: defaultUserProfile(),
+    // useCustomUserProfile/userProfileはdata.worldのスプレッド由来の値をそのまま使う
+    // (エクスポート側でexportWorldUserProfileFieldsによりサニタイズ済みのため、ここでは
+    // 特別扱いしない。ワールド専用設定ならそのまま復元され、共通の主人公ならデフォルト値になる)。
     createdAt: now,
     updatedAt: now,
   };
@@ -771,9 +789,7 @@ export async function importRoom(
         characterIdA: characterIdMap.get(r.characterIdA) ?? r.characterIdA,
         characterIdB: characterIdMap.get(r.characterIdB) ?? r.characterIdB,
       })),
-      // 念のため、取り込んだファイルにユーザープロフィールが含まれていても無視する
-      useCustomUserProfile: false,
-      userProfile: defaultUserProfile(),
+      // useCustomUserProfile/userProfileはwのスプレッド由来の値をそのまま使う(importWorldと同じ方針)
       createdAt: now,
       updatedAt: now,
     };
