@@ -9,6 +9,10 @@ const LAST_ROOM_ID_KEY = "ai-character-chat:lastRoomId";
 // 「データが空かどうか」ではなく、このフラグの有無だけで判定する
 // (ユーザーが後から全データを消してもオンボーディングを復活させないため)。
 const ONBOARDING_SEEDED_KEY = "ai-character-chat:onboardingSeeded";
+// サンプルコンテンツ(機能追加)のシード投入済みフラグ。オンボーディングとは別物の、
+// 新規ユーザーが最初から遊べる「野村健人」キャラと「帰り道」ルーム一式の投入判定に使う。
+// 判定方針はオンボーディングと同様、このフラグの有無だけで行う。
+const SAMPLE_CONTENT_SEEDED_KEY = "ai-character-chat:sampleContentSeeded";
 
 // 提供終了になった旧モデルID → 後継モデルID の対応表
 // (gemini-2.5-flash-lite は2026年に新規ユーザーへの提供が終了したため差し替える)
@@ -157,6 +161,28 @@ export function hasSeededOnboarding(): boolean {
 export function markOnboardingSeeded(): void {
   try {
     localStorage.setItem(ONBOARDING_SEEDED_KEY, "true");
+  } catch {
+    // localStorageが使えない環境では何もしない(致命的ではないため無視する)
+  }
+}
+
+/**
+ * サンプルコンテンツ(機能追加)のシードデータを投入済みかどうか。
+ * このフラグが立っていなければ、App.tsx側でsampleContentSeed.tsの投入処理を実行する。
+ */
+export function hasSeededSampleContent(): boolean {
+  try {
+    return localStorage.getItem(SAMPLE_CONTENT_SEEDED_KEY) === "true";
+  } catch {
+    // localStorageが使えない環境では「投入済み」として扱い、毎回投入しようとしないようにする
+    return true;
+  }
+}
+
+/** サンプルコンテンツのシードデータを投入済みとして記録する */
+export function markSampleContentSeeded(): void {
+  try {
+    localStorage.setItem(SAMPLE_CONTENT_SEEDED_KEY, "true");
   } catch {
     // localStorageが使えない環境では何もしない(致命的ではないため無視する)
   }

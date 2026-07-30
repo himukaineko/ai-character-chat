@@ -10,6 +10,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { HelpPage } from "./pages/HelpPage";
 import { useAppStore } from "./store";
 import { ensureOnboardingSeeded } from "./lib/onboardingSeed";
+import { ensureSampleContentSeeded } from "./lib/sampleContentSeed";
 
 function App() {
   const loadAll = useAppStore((s) => s.loadAll);
@@ -19,9 +20,12 @@ function App() {
   // 初回起動時オンボーディング(機能追加): まだシード投入していなければ、
   // 読み込みの前に「導きのテラス」ルーム一式を投入する
   // (判定・二重実行防止のロジックは lib/onboardingSeed.ts 側に集約している)。
+  // サンプルコンテンツ(機能追加): 同様に、まだ投入していなければ「野村健人」キャラと
+  // 「帰り道」ルーム一式を投入する(判定・二重実行防止は lib/sampleContentSeed.ts 側)。
+  // オンボーディングとは独立したデータのため、並行実行で問題ない。
   useEffect(() => {
     (async () => {
-      await ensureOnboardingSeeded();
+      await Promise.all([ensureOnboardingSeeded(), ensureSampleContentSeeded()]);
       await loadAll();
     })();
   }, [loadAll]);
