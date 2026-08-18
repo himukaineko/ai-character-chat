@@ -5,7 +5,9 @@ import { NavLink } from "react-router-dom";
 const navItems = [
   {
     to: "/",
-    label: "ホーム",
+    // 表記統一(機能改善): ラベルは「ホーム」だったが、この画面の中身はルーム一覧であり
+    // ページ側の見出しも「ルーム」のため、ナビ側を合わせる
+    label: "ルーム",
     icon: (
       <path d="M3 10.5 12 3l9 7.5M5 9.5V21h5v-6h4v6h5V9.5" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     ),

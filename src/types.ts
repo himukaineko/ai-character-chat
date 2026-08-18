@@ -137,8 +137,36 @@ export interface Room {
    * resolveGameMode() を経由すること。
    */
   gameMode?: GameModeConfig;
+  /**
+   * このルームで使うユーザー設定の選択(機能追加)。
+   * "default"=設定画面の共通設定 / "world"=紐づくワールドの専用設定 / "room"=このルーム専用設定。
+   * 追加前に作成された既存ルームはこのフィールドを持たないため、読み込み側は必ず
+   * undefined → "world" として扱うこと(ワールドの専用設定があればそれ、なければ共通設定、
+   * という従来の挙動と一致するため)。直接 room.userProfileMode を参照せず
+   * resolveRoomUserProfileMode() を経由すること。
+   */
+  userProfileMode?: RoomUserProfileMode;
+  /** ルーム専用のユーザー設定の中身。userProfileModeが"room"のときのみ使われる */
+  userProfile?: UserProfile;
   createdAt: number;
   updatedAt: number;
+}
+
+/**
+ * ルームで使うユーザー設定の選択肢(機能追加)。
+ * ワールドが紐づいていない/ワールドが専用設定を持たない場合、"world" は "default" と同じ結果になる
+ * (フォールバックするため)。UIではその場合 "world" の選択肢自体を出さない。
+ */
+export type RoomUserProfileMode = "default" | "world" | "room";
+
+/**
+ * userProfileMode未設定(既存ルーム)の場合は "world" 扱いにする防御的デフォルト。
+ * 「ワールドの専用設定があればそれ、なければ共通設定」という従来の挙動を保つための既定値。
+ */
+export function resolveRoomUserProfileMode(
+  mode: RoomUserProfileMode | undefined,
+): RoomUserProfileMode {
+  return mode ?? "world";
 }
 
 /** replyLength未設定(既存ルーム)の場合は "normal" 扱いにする防御的デフォルト */

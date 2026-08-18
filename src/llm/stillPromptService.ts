@@ -6,9 +6,10 @@
 // 生成結果はその場限りで、DBには保存しない(呼び出し側=モーダルが状態として保持するだけ)。
 import { db } from "../db";
 import type { Character, Message } from "../types";
-import { loadAppSettings, loadUserProfile } from "../lib/settings";
+import { loadAppSettings } from "../lib/settings";
 import { listMessages } from "../lib/messages";
 import { createLiteLLMClient } from "./createClient";
+import { resolveRoomUserProfile } from "./conversationService";
 import { formatMessageLine } from "./promptBuilder";
 import { LLMError } from "./types";
 
@@ -40,10 +41,10 @@ export async function generateStillPrompt(roomId: string): Promise<string> {
     throw new Error("会話がまだありません");
   }
 
-  // 機能追加: ルームにワールドが紐づいていて専用ユーザー設定を使う設定なら、そちらの外見を使う
+  // 機能追加: 会話生成と同じ解決ロジック(ルーム設定のuserProfileMode)でユーザー設定を選ぶ。
+  // 以前はワールドの専用設定しか見ておらず、ルーム専用設定が反映されない不具合があった。
   const world = room.worldId ? await db.worlds.get(room.worldId) : undefined;
-  const userProfile =
-    world && world.useCustomUserProfile ? world.userProfile : loadUserProfile();
+  const userProfile = resolveRoomUserProfile(room, world);
 
   const charactersById = new Map(characters.map((c) => [c.id, c]));
   const presentCharacters = room.memberIds

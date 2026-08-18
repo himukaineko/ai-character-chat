@@ -4,7 +4,7 @@
 // 生成結果を検証してからメッセージとして保存する。
 import { db } from "../db";
 import type { GameModeConfig, GameStatChange, Message, Room, UserProfile, World } from "../types";
-import { resolveGameMode } from "../types";
+import { resolveGameMode, resolveRoomUserProfileMode } from "../types";
 import { loadAppSettings, loadUserProfile } from "../lib/settings";
 import {
   addEditedMessage,
@@ -71,12 +71,21 @@ export async function loadRoomContext(roomId: string) {
 
 /**
  * 機能追加: このルームで使うユーザー設定を決定する。
- * ワールドが紐づいていて、かつそのワールドが専用ユーザー設定を使う設定なら、そちらを優先する。
- * そうでなければ従来どおりグローバル設定(loadUserProfile)を使う。
- * suggestionService.ts(発言・トピックの提案補助)からも再利用するため export する。
+ * ルーム設定の userProfileMode で明示的に選ばれたものを使う:
+ *   "room"    → このルーム専用の設定
+ *   "world"   → 紐づくワールドの専用設定
+ *   "default" → 設定画面の共通設定(loadUserProfile)
+ * 選ばれた設定が存在しない場合(例: "world"だがワールド未紐づけ、"room"だが中身が無い)は
+ * 共通設定にフォールバックする。既存ルームは userProfileMode を持たず "world" 扱いになるため、
+ * 「ワールドの専用設定があればそれ、なければ共通設定」という従来の挙動がそのまま保たれる。
+ * suggestionService.ts / stillPromptService.ts からも再利用するため export する。
  */
-export function resolveRoomUserProfile(world: World | undefined): UserProfile {
-  if (world && world.useCustomUserProfile) {
+export function resolveRoomUserProfile(room: Room, world: World | undefined): UserProfile {
+  const mode = resolveRoomUserProfileMode(room.userProfileMode);
+  if (mode === "room" && room.userProfile) {
+    return room.userProfile;
+  }
+  if (mode === "world" && world && world.useCustomUserProfile) {
     return world.userProfile;
   }
   return loadUserProfile();
@@ -164,8 +173,8 @@ async function generateBatch(
   const client = createMainLLMClient(settings);
 
   const { room, members, memories, summaries, allMessages, world } = await loadRoomContext(roomId);
-  // 機能追加: ワールドが専用ユーザー設定を使う設定ならそちらを、そうでなければグローバル設定を使う
-  const userProfile = resolveRoomUserProfile(world);
+  // 機能追加: ルーム専用 > ワールド専用 > 共通(グローバル)の優先順位でユーザー設定を決める
+  const userProfile = resolveRoomUserProfile(room, world);
   const recentCount = Math.max(1, settings.recentMessageCount || 30);
   const recentMessages = allMessages.slice(-recentCount);
 

@@ -454,8 +454,11 @@ export function WorldFormModal({
   );
 }
 
-/** ワールド専用ユーザー設定の入力欄。SettingsPageのユーザープロフィールと同じ項目構成 */
-function WorldUserProfileFields({
+/**
+ * ワールド/ルーム専用ユーザー設定の入力欄。SettingsPageのユーザープロフィールと同じ項目構成。
+ * RoomFormModal.tsx(ルーム専用ユーザー設定、機能追加)でも同じ入力欄を再利用するため export する。
+ */
+export function WorldUserProfileFields({
   profile,
   onChange,
 }: {

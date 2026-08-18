@@ -158,7 +158,7 @@ export function HelpPage() {
             <Tag>ライブラリ</Tag>で作成します。<Tag>AIで一括提案</Tag>を使えば、簡単な説明を入力するだけで自動生成できます。
           </QuickStartStep>
           <QuickStartStep number={3} title="ルームを作って話す">
-            ホームから<Tag>新規ルーム作成</Tag>。あとは<Tag>トピック</Tag>で話題を振るか、<Tag>発言</Tag>で参加します。
+            <Tag>ルーム</Tag>画面から<Tag>新規ルーム作成</Tag>。あとは<Tag>トピック</Tag>で話題を振るか、<Tag>発言</Tag>で参加します。
           </QuickStartStep>
         </ol>
       </section>
@@ -213,7 +213,7 @@ export function HelpPage() {
               ルーム設定の<Tag>地の文・ナレーターのカスタム</Tag>では、軽快さ・ツッコミ役っぽさ・二人称視点(「あなたは」で語りかける)など、地の文やナレーターの文体を自由記述でカスタムできます。
             </Bullet>
             <Bullet>
-              ルーム設定の<Tag>表紙イラスト</Tag>で画像を1枚設定すると、ホーム画面のルームカードに本の表紙のように表示されます。
+              ルーム設定の<Tag>表紙イラスト</Tag>で画像を1枚設定すると、ルーム一覧のカードに本の表紙のように表示されます。
             </Bullet>
           </BulletList>
         </AccordionSection>

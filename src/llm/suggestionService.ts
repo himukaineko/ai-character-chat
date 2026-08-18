@@ -34,7 +34,7 @@ export async function requestInputSuggestions(
   const client = createLiteLLMClient(settings);
 
   const { room, members, allMessages, world } = await loadRoomContext(roomId);
-  const userProfile = resolveRoomUserProfile(world);
+  const userProfile = resolveRoomUserProfile(room, world);
   const included = filterIncludedMembers(members);
   const recentMessages = allMessages.slice(-RECENT_MESSAGE_COUNT_FOR_SUGGESTION);
 

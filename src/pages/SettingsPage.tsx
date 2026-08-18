@@ -68,6 +68,16 @@ export function SettingsPage() {
   const [importDone, setImportDone] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 折りたたんだ状態でも入力済みかどうかが分かるようにするためのフラグ(機能改善)
+  const hasProfileInput =
+    profile.name.trim() !== "" ||
+    profile.calledAs.trim() !== "" ||
+    profile.treatment.trim() !== "" ||
+    profile.background.trim() !== "" ||
+    profile.appearance.trim() !== "" ||
+    profile.dislikedTopics.length > 0 ||
+    profile.preferredMood.trim() !== "";
+
   const handleSaveProfile = () => {
     saveUserProfile(profile);
     setProfileSaved(true);
@@ -204,13 +214,43 @@ export function SettingsPage() {
     <div className="mx-auto max-w-2xl px-4 py-8">
       <h1 className="text-xl font-bold text-zinc-100">設定</h1>
 
-      {/* ユーザープロフィール */}
-      <section className="mt-6 rounded-lg border border-zinc-800 bg-zinc-900 p-4">
-        <h2 className="text-base font-semibold text-zinc-100">ユーザープロフィール</h2>
-        <p className="mt-1 text-xs text-zinc-500">
-          キャラクターがあなたを認識するための設定です。
-        </p>
-        <div className="mt-4 space-y-3">
+      {/* ユーザープロフィール(機能改善: 任意であることの明示 + 折りたたみ)
+          入力欄が縦に長く、常に開いていると「必ず入力しなければならない」ように見えるという
+          指摘があったため、details/summaryで折りたたむ。入力済みかどうかは見出し横に出して、
+          開かなくても状態が分かるようにする。 */}
+      <details className="group mt-6 rounded-lg border border-zinc-800 bg-zinc-900 open:pb-4">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0">
+            <span className="flex items-center gap-2">
+              <h2 className="text-base font-semibold text-zinc-100">ユーザープロフィール</h2>
+              <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-zinc-400">
+                任意
+              </span>
+              {hasProfileInput && (
+                <span className="rounded bg-emerald-950/60 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-emerald-400">
+                  入力済み
+                </span>
+              )}
+            </span>
+            <span className="mt-1 block text-xs text-zinc-500">
+              キャラクターがあなたを認識するための設定です。空のままでも会話できます。
+            </span>
+          </span>
+          <span className="shrink-0 text-xs text-zinc-500 transition-transform group-open:rotate-180">
+            ▼
+          </span>
+        </summary>
+
+        <div className="px-4">
+          <p className="rounded-md border border-indigo-800/60 bg-indigo-950/30 px-3 py-2 text-xs leading-relaxed text-indigo-200">
+            ここは全ルーム共通の設定です。世界観ごとに別の自分を演じたい場合は、
+            <span className="font-semibold">ワールド設定</span>や
+            <span className="font-semibold">ルーム設定</span>でそれぞれ専用のユーザー設定を持たせられます
+            (ルーム設定の「ユーザー設定」で、共通・ワールド・ルーム専用のどれを使うか選べます)。
+          </p>
+        </div>
+
+        <div className="mt-4 space-y-3 px-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-zinc-300">名前</label>
             <input
@@ -291,7 +331,7 @@ export function SettingsPage() {
             />
           </div>
         </div>
-        <div className="mt-4 flex items-center gap-3">
+        <div className="mt-4 flex items-center gap-3 px-4">
           <button
             type="button"
             onClick={handleSaveProfile}
@@ -301,7 +341,7 @@ export function SettingsPage() {
           </button>
           {profileSaved && <span className="text-xs text-emerald-400">保存しました</span>}
         </div>
-      </section>
+      </details>
 
       {/* 表示設定(チャット画面の文字サイズ・背景色) */}
       <section className="mt-6 rounded-lg border border-zinc-800 bg-zinc-900 p-4">

@@ -234,7 +234,7 @@ export function RoomPage() {
       <div className="mx-auto max-w-3xl px-4 py-8">
         <p className="text-zinc-400">ルームが見つかりませんでした。</p>
         <Link to="/" className="mt-2 inline-block text-sm text-indigo-400 hover:underline">
-          ホームに戻る
+          ルーム一覧に戻る
         </Link>
       </div>
     );

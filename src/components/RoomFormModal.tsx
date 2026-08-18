@@ -5,14 +5,30 @@
 // テーマ変数が無いため、フォールバック値(従来のダーク配色)でこれまでどおりの見た目になる。
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
-import type { Character, GameStatDef, NarrationLevel, ReplyLength, Room, World } from "../types";
-import { resolveCoverFocalPoint, resolveGameMode, resolveReplyLength } from "../types";
+import type {
+  Character,
+  GameStatDef,
+  NarrationLevel,
+  ReplyLength,
+  Room,
+  UserProfile,
+  World,
+} from "../types";
+import type { RoomUserProfileMode } from "../types";
+import {
+  resolveCoverFocalPoint,
+  resolveGameMode,
+  resolveReplyLength,
+  resolveRoomUserProfileMode,
+} from "../types";
 import type { RoomInput } from "../lib/rooms";
 import { useBlobUrl } from "../lib/useBlobUrl";
 import { ILLUSTRATION_MAX_DIMENSION, resizeImageBlob } from "../lib/imageResize";
 import { generateId } from "../lib/id";
+import { defaultUserProfile } from "../lib/settings";
 import { requestGameAssist } from "../llm/gameAssist";
 import { LLMError, LLM_ERROR_MESSAGES } from "../llm/types";
+import { WorldUserProfileFields } from "./WorldFormModal";
 
 interface RoomFormModalProps {
   open: boolean;
@@ -50,6 +66,8 @@ function emptyForm(): RoomInput {
     coverFocalPoint: undefined,
     narratorStyle: "",
     gameMode: undefined,
+    userProfileMode: "world",
+    userProfile: defaultUserProfile(),
   };
 }
 
@@ -171,7 +189,7 @@ function CoverImageField({
         </button>
       )}
       <p className="mt-1 text-xs text-[var(--chat-placeholder-text,#71717a)]">
-        トリミングせずそのまま登録され(大きすぎる画像は自動で縮小されます)、ホーム画面のルームカードに表紙として表示されます。
+        トリミングせずそのまま登録され(大きすぎる画像は自動で縮小されます)、ルーム一覧のカードに表紙として表示されます。
       </p>
     </div>
   );
@@ -216,6 +234,10 @@ export function RoomFormModal({
         narratorStyle: room.narratorStyle ?? "",
         // 既存ルームはgameModeを持たない場合がある(未設定=OFF扱い。表示側でresolveGameMode()を使う)
         gameMode: room.gameMode,
+        // 既存ルームはuserProfileMode/userProfileを持たない場合がある
+        // (未設定="world"扱い=ワールドの専用設定があればそれ、なければ共通設定)
+        userProfileMode: resolveRoomUserProfileMode(room.userProfileMode),
+        userProfile: room.userProfile ?? defaultUserProfile(),
       });
     } else {
       setForm(emptyForm());
@@ -245,6 +267,24 @@ export function RoomFormModal({
       memberIds: Array.from(new Set([...f.memberIds, ...selectedWorld.characterIds])),
     }));
   };
+
+  // ---- ユーザー設定の選択(機能追加) ----
+  // ワールドが専用ユーザー設定を持っているときだけ「ワールドの設定」を選べるようにする
+  // (持っていない場合に選んでも共通設定と同じ結果になり、表示と実態がズレて紛らわしいため)。
+  const worldHasCustomProfile = !!selectedWorld?.useCustomUserProfile;
+  const worldProfileName = selectedWorld?.name || "(名称未設定)";
+  const userProfileModeOptions: { value: RoomUserProfileMode; label: string }[] = [
+    { value: "default", label: "共通の設定" },
+    ...(worldHasCustomProfile
+      ? [{ value: "world" as const, label: `ワールドの設定` }]
+      : []),
+    { value: "room", label: "このルーム専用" },
+  ];
+  // 既存ルームの既定値は "world" だが、選択肢に出せない状況(ワールド未紐づけ等)では
+  // 実際の挙動(共通設定へのフォールバック)に合わせて "default" を選択状態として表示する。
+  const rawUserProfileMode = resolveRoomUserProfileMode(form.userProfileMode);
+  const userProfileMode: RoomUserProfileMode =
+    rawUserProfileMode === "world" && !worldHasCustomProfile ? "default" : rawUserProfileMode;
 
   // ---- ゲームモード編集ヘルパー(機能追加) ----
   // 表示・編集は常にresolveGameMode()経由で解決済みの値を使う(未設定=OFFの防御的デフォルトを踏襲)
@@ -412,6 +452,47 @@ export function RoomFormModal({
               </p>
             </div>
           )}
+
+          {/* ユーザー設定の選択(機能追加): 「設定画面の共通設定」「ワールドの専用設定」
+              「このルーム専用の設定」から明示的に選ばせる。ワールドが専用設定を持たない場合は
+              "world" の選択肢自体を出さない(選んでも共通設定と同じ結果になり紛らわしいため)。 */}
+          <div>
+            <label className="mb-1 block text-sm font-medium text-[var(--chat-button-text,#d4d4d8)]">
+              ユーザー設定
+            </label>
+            <div className="flex flex-wrap gap-1 rounded-md border border-[var(--chat-button-border,#3f3f46)] p-0.5 text-sm">
+              {userProfileModeOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, userProfileMode: opt.value }))}
+                  className={`rounded px-3 py-1 ${
+                    userProfileMode === opt.value
+                      ? "bg-indigo-600 text-white"
+                      : "text-[var(--chat-placeholder-text,#a1a1aa)] hover:text-[var(--chat-button-text,#d4d4d8)]"
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-xs text-[var(--chat-placeholder-text,#71717a)]">
+              {userProfileMode === "room"
+                ? "このルームでは、下に入力した内容がユーザー(あなた)の設定として使われます。"
+                : userProfileMode === "world"
+                  ? `このルームでは、ワールド「${worldProfileName}」に設定されたユーザー設定が使われます。`
+                  : "このルームでは、設定画面で入力したユーザー設定が使われます。"}
+            </p>
+
+            {userProfileMode === "room" && (
+              <div className="mt-3 space-y-3 rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#27272a)]/50 p-3">
+                <WorldUserProfileFields
+                  profile={form.userProfile ?? defaultUserProfile()}
+                  onChange={(p: UserProfile) => setForm((f) => ({ ...f, userProfile: p }))}
+                />
+              </div>
+            )}
+          </div>
 
           <div>
             <div className="mb-1 flex items-center justify-between gap-2">
