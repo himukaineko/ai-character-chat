@@ -14,12 +14,14 @@ import type {
   UserProfile,
   World,
 } from "../types";
-import type { RoomUserProfileMode } from "../types";
+import type { RoomUserProfileMode, WritingStyle } from "../types";
 import {
+  WRITING_STYLE_OPTIONS,
   resolveCoverFocalPoint,
   resolveGameMode,
   resolveReplyLength,
   resolveRoomUserProfileMode,
+  resolveWritingStyle,
 } from "../types";
 import type { RoomInput } from "../lib/rooms";
 import { useBlobUrl } from "../lib/useBlobUrl";
@@ -65,6 +67,7 @@ function emptyForm(): RoomInput {
     coverImage: undefined,
     coverFocalPoint: undefined,
     narratorStyle: "",
+    writingStyle: "none",
     gameMode: undefined,
     userProfileMode: "world",
     userProfile: defaultUserProfile(),
@@ -232,6 +235,8 @@ export function RoomFormModal({
         coverFocalPoint: room.coverFocalPoint,
         // 既存ルームはnarratorStyleを持たない場合がある(未設定=空文字扱い)
         narratorStyle: room.narratorStyle ?? "",
+        // 既存ルームはwritingStyleを持たない場合がある(未設定="none"=指定なし扱い)
+        writingStyle: resolveWritingStyle(room.writingStyle),
         // 既存ルームはgameModeを持たない場合がある(未設定=OFF扱い。表示側でresolveGameMode()を使う)
         gameMode: room.gameMode,
         // 既存ルームはuserProfileMode/userProfileを持たない場合がある
@@ -267,6 +272,13 @@ export function RoomFormModal({
       memberIds: Array.from(new Set([...f.memberIds, ...selectedWorld.characterIds])),
     }));
   };
+
+  // ---- 文章スタイル(機能追加) ----
+  // 選択中のスタイルの説明文をプルダウンの下に出すため、選択肢オブジェクトごと取り出す
+  // (未知の値が保存されていた場合も "指定なし" にフォールバックして表示を壊さない)。
+  const selectedWritingStyle =
+    WRITING_STYLE_OPTIONS.find((o) => o.value === resolveWritingStyle(form.writingStyle)) ??
+    WRITING_STYLE_OPTIONS[0];
 
   // ---- ユーザー設定の選択(機能追加) ----
   // ワールドが専用ユーザー設定を持っているときだけ「ワールドの設定」を選べるようにする
@@ -562,9 +574,36 @@ export function RoomFormModal({
             </select>
           </div>
 
+          {/* 文章スタイル(機能追加): 地の文・セリフを「どう書くか」だけを指定するプリセット。
+              ストーリー展開やキャラ設定には影響させない(内部指示側で歯止めをかけている)。 */}
           <div>
             <label className="mb-1 block text-sm font-medium text-[var(--chat-button-text,#d4d4d8)]">
-              地の文・ナレーターのカスタム(任意)
+              文章スタイル(任意)
+            </label>
+            <select
+              value={resolveWritingStyle(form.writingStyle)}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, writingStyle: e.target.value as WritingStyle }))
+              }
+              className="w-full rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#27272a)] px-3 py-2 text-sm text-[var(--chat-input-text,#f4f4f5)] outline-none focus:border-indigo-500"
+            >
+              {WRITING_STYLE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-[var(--chat-placeholder-text,#71717a)]">
+              {selectedWritingStyle.description}
+            </p>
+            <p className="mt-1 text-xs text-[var(--chat-placeholder-text,#71717a)]">
+              文章の書き方だけを変える設定です。キャラクターの性格・口調・関係性やストーリー展開は変わりません。
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-[var(--chat-button-text,#d4d4d8)]">
+              文章表現・ナレーターのカスタム(任意)
             </label>
             <textarea
               value={form.narratorStyle ?? ""}
@@ -572,11 +611,11 @@ export function RoomFormModal({
                 setForm((f) => ({ ...f, narratorStyle: e.target.value }))
               }
               rows={2}
-              placeholder="例: 軽快なテンポで/ツッコミ役のように/二人称視点(『あなたは』で語りかける)で"
+              placeholder="例: 心理描写を多め。比喩は控えめ。二人称視点で『あなた』として語りかける。"
               className="w-full resize-none rounded-md border border-[var(--chat-button-border,#3f3f46)] bg-[var(--chat-input-bg,#27272a)] px-3 py-2 text-sm text-[var(--chat-input-text,#f4f4f5)] outline-none placeholder:text-[var(--chat-placeholder-text,#71717a)] focus:border-indigo-500"
             />
             <p className="mt-1 text-xs text-[var(--chat-placeholder-text,#71717a)]">
-              ナレーションレベルが「なし」以外のときに効果があります。
+              上の文章スタイルと併用できます。競合する内容を書いた場合は、こちらが優先されます。
             </p>
           </div>
 

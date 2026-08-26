@@ -18,7 +18,18 @@ import type {
   UserProfile,
   World,
 } from "../types";
-import { CHARACTER_GENDER_OPTIONS, resolveCharacterGender, resolveReplyLength } from "../types";
+import {
+  CHARACTER_GENDER_OPTIONS,
+  WRITING_STYLE_OPTIONS,
+  resolveCharacterGender,
+  resolveReplyLength,
+  resolveWritingStyle,
+} from "../types";
+import {
+  WRITING_STYLE_DIALOGUE_ONLY_NOTE,
+  WRITING_STYLE_GUARD,
+  WRITING_STYLE_INSTRUCTIONS,
+} from "./writingStyleInstructions";
 import type { BuiltPrompt } from "./types";
 
 export interface RoomMemberInfo {
@@ -225,13 +236,27 @@ export function buildConversationPrompt(params: PromptBuildParams): BuiltPrompt 
     "## 出力方針(ナレーションレベル: " + narrationLevelLabel(room.narrationLevel) + ")",
     NARRATION_INSTRUCTIONS[room.narrationLevel],
   ];
-  // 機能追加: ナレーター・地の文のカスタム文体設定(自由記述)。
+  // 機能追加: 文章スタイル(プリセット)。「起きていることをどう書くか」だけを指定する。
+  // ナレーションレベル(地の文の量・形式)・返事の長さ(分量)とは責任範囲を分ける。
+  // "none"(指定なし)のときはセクション自体を出力しない(通常の生成に一切影響させない)。
+  const writingStyleText = buildWritingStyleSection(room);
+  if (writingStyleText) narrationLines.push(writingStyleText);
+
+  // 機能追加: 文章表現・ナレーターのカスタム(自由記述)。
+  // 文章スタイル(プリセット)と併用でき、競合した場合はこちらを優先する。
   // narrationLevelが"none"の場合はそもそも地の文自体を出力しない指示が優先されるため、
   // narratorStyleが入力されていても実害はない(セリフのみという指示と矛盾しても、
   // 「出力しない」という指示のほうが具体的で強いため上書きされる想定)。よって
   // narrationLevelによる分岐はせず、常に追加する実装とする。
   if (room.narratorStyle && room.narratorStyle.trim() !== "") {
-    narrationLines.push(`地の文・ナレーターの文体について: ${room.narratorStyle.trim()}`);
+    narrationLines.push(
+      [
+        "### 文章表現の追加指定(ユーザーによる自由記述)",
+        room.narratorStyle.trim(),
+        "この追加指定は、上の文章スタイル(プリセット)より優先します。両者が競合しない部分は、" +
+          "文章スタイルを基本としつつこの追加指定を反映してください。",
+      ].join("\n"),
+    );
   }
   const replyLengthInstruction = REPLY_LENGTH_INSTRUCTIONS[replyLength];
   if (replyLengthInstruction) {
@@ -249,6 +274,37 @@ export function buildConversationPrompt(params: PromptBuildParams): BuiltPrompt 
     systemInstruction,
     userContent: sections.join("\n\n"),
   };
+}
+
+/**
+ * 機能追加: 文章スタイルのセクションを組み立てる。
+ * "none"(指定なし)のときは null を返し、セクション自体を出力しない
+ * (文章スタイル未使用のルームのプロンプトを従来と完全に同じに保つため)。
+ *
+ * 出力内容は「内部指示 + 共通の歯止め(WRITING_STYLE_GUARD) + 優先順位」。
+ * ナレーションレベルが "none"(セリフのみ)のときは、スタイル適用のために地の文を
+ * 新しく作らないよう制限(WRITING_STYLE_DIALOGUE_ONLY_NOTE)も添える。
+ */
+function buildWritingStyleSection(room: Room): string | null {
+  const style = resolveWritingStyle(room.writingStyle);
+  const instruction = WRITING_STYLE_INSTRUCTIONS[style];
+  if (style === "none" || !instruction) return null;
+
+  const label = WRITING_STYLE_OPTIONS.find((o) => o.value === style)?.label ?? style;
+  const lines = [`### 文章スタイル: ${label}`, instruction, WRITING_STYLE_GUARD];
+
+  if (room.narrationLevel === "none") {
+    lines.push(WRITING_STYLE_DIALOGUE_ONLY_NOTE);
+  }
+
+  lines.push(
+    "設定が競合した場合の優先順位: " +
+      "1. キャラクター固有の設定・口調・性格 / 2. 現在の会話内容・ストーリー・世界設定 / " +
+      "3. ユーザーが自由記述した文章表現の追加指定 / 4. この文章スタイル / 5. 既定の文章生成方針。" +
+      "文章スタイルが上位の設定を上書きしないようにしてください。",
+  );
+
+  return lines.join("\n");
 }
 
 function narrationLevelLabel(level: NarrationLevel): string {
@@ -313,6 +369,17 @@ function buildSystemInstruction(
     // 内面の一貫性を保つための背景情報である、という基本方針を伝える。
     // ただし自然な流れでの告白・打ち明け話までは抑制しないよう「基本的には」という言い回しにする。
     "キャラクター設定(性格・背景・秘密・好き嫌いなど)は、その人物の内面の一貫性を保つための情報です。基本的には、セリフの中でこれらをそのまま説明したり、自己紹介のように語ったりしないでください。性格は言葉選びや反応の仕方ににじませ、背景や秘密は本人が語るのではなく、会話の流れや行動描写を通じて自然に匂わせる程度に留めてください(ただし、話の流れで本人が自然に打ち明ける展開そのものを禁止するものではありません)。",
+    // 機能追加(設定の反復・引き写し対策): 上の指示は「セリフの中で」しか対象にしていなかったため、
+    // 地の文が毎ターン設定文を言い換えて反復し、人物紹介のようになってしまう問題があった。
+    // 地の文にも同じ方針を適用し、設定は「参照する資料」であって「本文に書き写す素材」ではないことを明示する。
+    "この方針は地の文(type: \"narration\")にも同じく適用してください。地の文は、いま目の前で起きている出来事・動作・空気を書くためのものです。人物の経歴・肩書き・過去・秘密・性格の要約を説明する場所ではありません。",
+    "キャラクター設定に書かれている語句・言い回しを、そのまま(あるいはほぼ同じ表現に言い換えて)本文に持ち込まないでください。設定は参照するための資料であり、本文に書き写す素材ではありません。設定を読んでいない読者にも自然に読める文章にしてください。",
+    "同じ設定要素(生い立ち、過去の出来事、立場、抱えている感情など)を毎回の生成で繰り返し持ち出さないでください。一度描写した事柄は共有済みの前提として扱い、次は今の場面で新しく起きていることに焦点を当ててください。",
+    // 機能追加(足踏み対策): 同じ感情表明を言い換えて繰り返すだけで場面が進まない、という報告への対応。
+    // 「繰り返さない」だけだと会話が痩せるため、「小さく前に進める」とセットで指示する。
+    "生成する前に直近の会話ログを見返し、すでに言われたこと・すでに描写された感情や動作を繰り返していないか確認してください。同じ趣旨の宣言(例: 相手への執着や決意の表明)、同じ身体描写、同じ比喩を、表現だけ変えて何度も出すことは避けてください。すでに相手に伝わっている事柄は、もう一度言わせる必要はありません。",
+    "1回の生成では、場面を少しでも前に進めてください。前進とは、新しい動作が起きる、位置関係や状況が変わる、新しい話題・情報・提案が出る、相手の反応を受けて気持ちや関係に変化が生じる、といった具体的な変化のことです。感情の宣言を積み重ねるだけで場面が同じ位置に留まる状態にしないでください。",
+    "ただし、前に進めるために突飛な展開を持ち込まないでください。唐突な事件、未登場の人物、場所や時間の飛躍、キャラクターの性格から外れた極端な行動などは避け、いまの場面から自然につながる小さな一歩を選んでください。物語の大きな選択や方向性はユーザーが決めるものです。キャラクターが勝手に話を大きく動かして、ユーザーの選択肢を奪わないようにしてください。",
     // 機能追加(合意事項4): 発言配分を機械的な均等割り・順番回しにしない。
     "発言の配分は、性格や話の流れ、場面に応じて自然に決まるようにしてください。ある話題では特定のキャラが中心になり、別の場面では全員が均等に盛り上がってもかまいません。「毎回順番に全員へ発言を割り振る」ような機械的なターン制にだけはしないでください。",
     // 機能追加(合意事項5): 短い相槌・一言だけの発言も自然な選択肢として許容する。
@@ -660,9 +727,14 @@ function buildTriggerSection(trigger: ConversationTrigger): string {
     }
     case "continue":
     default:
+      // 機能追加(足踏み対策): ユーザーからの新しい入力が無いぶん、直前の内容をなぞるだけの
+      // 生成になりやすい。ここでも「同じ位置に留まらない」ことを明示する。
       return [
         "## 今回の生成指示",
         "直近の会話の流れを踏まえ、キャラクターたちの会話を自然に続けてください。",
+        "今回はユーザーからの新しい入力がありません。直前のやり取りをなぞって同じ感情や主張を繰り返すのではなく、" +
+          "キャラクター自身の判断で場面を少しだけ前に進めてください(行動を起こす、話題を変える、提案する、" +
+          "相手の反応を受けて態度が変わる、など)。ただし、いまの場面から自然につながる範囲に留めてください。",
       ].join("\n");
   }
 }

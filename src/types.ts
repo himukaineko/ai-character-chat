@@ -80,6 +80,95 @@ export function getCharacterGallery(
 /** ナレーションレベル */
 export type NarrationLevel = "none" | "light" | "novel" | "narrator";
 
+/**
+ * 文章スタイル(機能追加)。
+ * 「何が起こるか」ではなく「起きていることをどう書くか」だけを指定する設定。
+ * キャラの性格・口調・関係性・ストーリー展開には影響させない(詳細な内部指示は
+ * src/llm/writingStyleInstructions.ts、優先順位の扱いは promptBuilder.ts 側で担保する)。
+ * ナレーションレベル(地の文の量・形式)、返事の長さ(分量)とは責任範囲を分ける。
+ */
+export type WritingStyle =
+  | "none"
+  | "passionate"
+  | "romanticPsychology"
+  | "naturalIntimate"
+  | "hardboiled"
+  | "cinematic"
+  | "lyrical"
+  | "youth"
+  | "lightNovel"
+  | "psychologicalHorror"
+  | "highFantasy";
+
+/** 文章スタイルの選択肢とUI表示用の説明文(内部指示は writingStyleInstructions.ts 側に持つ) */
+export const WRITING_STYLE_OPTIONS: {
+  value: WritingStyle;
+  label: string;
+  description: string;
+}[] = [
+  {
+    value: "none",
+    label: "指定なし",
+    description:
+      "特定の文章スタイルを指定せず、キャラクター設定や他の会話設定に従って自然に描写します。",
+  },
+  {
+    value: "passionate",
+    label: "情念的",
+    description: "執着・渇望・葛藤など、強い感情を身体感覚や内面まで濃密に描きます。",
+  },
+  {
+    value: "romanticPsychology",
+    label: "恋愛心理",
+    description: "恋愛感情の小さな変化や、本人も言葉にできない心の揺れを丁寧に描きます。",
+  },
+  {
+    value: "naturalIntimate",
+    label: "自然体・親密",
+    description: "仕草や距離、生活感を通して、自然で現実感のある親密さを描きます。",
+  },
+  {
+    value: "hardboiled",
+    label: "ハードボイルド",
+    description: "説明を抑え、行動と観察を中心にした硬質で乾いた文章にします。",
+  },
+  {
+    value: "cinematic",
+    label: "映画的",
+    description: "光、表情、動き、位置関係を使い、映像が浮かぶように場面を描きます。",
+  },
+  {
+    value: "lyrical",
+    label: "抒情文学",
+    description: "情景と感情を重ね、比喩や余韻を活かした美しい文章にします。",
+  },
+  {
+    value: "youth",
+    label: "青春小説",
+    description: "軽やかで瑞々しく、日常の出来事や感情を鮮明に描きます。",
+  },
+  {
+    value: "lightNovel",
+    label: "ライトノベル",
+    description: "会話とテンポを重視した、軽快で読みやすい文章にします。",
+  },
+  {
+    value: "psychologicalHorror",
+    label: "心理ホラー",
+    description: "小さな違和感を積み重ね、静かな不安や心理的圧迫感を生み出します。",
+  },
+  {
+    value: "highFantasy",
+    label: "王道ファンタジー",
+    description: "幻想的な世界や風景に奥行きを持たせる、格調ある物語調の文章にします。",
+  },
+];
+
+/** writingStyle未設定(既存ルーム)の場合は "none"(指定なし)扱いにする防御的デフォルト */
+export function resolveWritingStyle(writingStyle: WritingStyle | undefined): WritingStyle {
+  return writingStyle ?? "none";
+}
+
 /** 返事の長さ */
 export type ReplyLength = "short" | "normal" | "long";
 
@@ -128,6 +217,15 @@ export interface Room {
    * 「カスタム指定なし」を意味し、プロンプトには何も追加しない。
    */
   narratorStyle?: string;
+  /**
+   * 文章スタイル(機能追加)。
+   * 地の文・セリフを「どのような文章表現で書くか」だけを指定する(何が起こるかには関与しない)。
+   * ナレーションレベル(地の文の量・形式)・返事の長さ(分量)・narratorStyle(自由入力の追加指定)とは
+   * 責任範囲が別。追加前に作成された既存ルームはこのフィールドを持たないため、読み込み側は必ず
+   * undefined → "none"(指定なし)として扱うこと。直接 room.writingStyle を参照せず
+   * resolveWritingStyle() を経由すること。
+   */
+  writingStyle?: WritingStyle;
   /**
    * ゲームモード設定(機能追加)。
    * ONにすると恋愛シミュレーション等の遊び方ができる: キャラにステータス(好感度など)がつき、
