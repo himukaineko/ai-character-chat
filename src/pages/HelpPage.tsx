@@ -14,6 +14,8 @@ import {
 } from "../components/room/RoomBarIcons";
 // 作者への応援・SNS誘導セクション用(機能追加)
 import { SUPPORT_LINKS } from "../components/SupportLinks";
+// アプリ名・バージョン表示用(機能追加)
+import { APP_NAME, APP_VERSION } from "../lib/appInfo";
 
 // ボタン名・画面名を目立たせるためのバッジ風インライン表示
 function Tag({ children }: { children: ReactNode }) {
@@ -440,6 +442,12 @@ export function HelpPage() {
           </BulletList>
         </AccordionSection>
       </div>
+
+      {/* 機能追加: アプリ名+バージョン。不具合報告時の切り分け(古いキャッシュを見ていないか等)に使う。
+          バージョンはpackage.jsonの値をビルド時に埋め込んでいる(src/lib/appInfo.ts参照)。 */}
+      <p className="mt-8 text-center text-xs text-zinc-600">
+        {APP_NAME} v{APP_VERSION}
+      </p>
     </div>
   );
 }

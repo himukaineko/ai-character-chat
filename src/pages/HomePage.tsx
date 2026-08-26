@@ -6,6 +6,7 @@ import { useAppStore } from "../store";
 import { RoomFormModal } from "../components/RoomFormModal";
 import { CharacterAvatar } from "../components/CharacterAvatar";
 import { getRoomSummaries, type RoomSummary } from "../lib/messages";
+import { APP_NAME } from "../lib/appInfo";
 import { loadLastRoomId, loadUserProfile } from "../lib/settings";
 import { useBlobUrl } from "../lib/useBlobUrl";
 import type { Character, Message, Room, World } from "../types";
@@ -258,7 +259,12 @@ export function HomePage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-zinc-100">ルーム</h1>
+        {/* 機能追加: アプリ名はこれまでブラウザのタブとOGPにしか無く、画面内に出ていなかった。
+            最初に開く画面である一覧の見出し上に、控えめに添える */}
+        <div className="min-w-0">
+          <p className="text-xs font-medium tracking-wide text-zinc-500">{APP_NAME}</p>
+          <h1 className="text-xl font-bold text-zinc-100">ルーム</h1>
+        </div>
         <button
           type="button"
           onClick={() => setFormOpen(true)}
