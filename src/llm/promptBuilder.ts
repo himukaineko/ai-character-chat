@@ -338,8 +338,12 @@ function buildSystemInstruction(
   replyLength: ReplyLength,
 ): string {
   const roster = Array.from(includedNames);
+  // バグ修正(1対1ルームで地の文が出ない): 以前は「複数の発言を出力しないでください」と書いており、
+  // AIが「出力は1件だけ」と解釈して地の文(narration)まで一切出さなくなっていた。
+  // これは同じキャラの連投を防ぐための制限であって、地の文の可否はナレーションレベル側の責務のため、
+  // 制限の対象がセリフ(dialogue)であることを明示する。
   const batchSizeInstruction = isSingleReplyMode
-    ? "今回はユーザーへの返事として、そのキャラクターの発言を1つだけ生成してください。複数の発言を出力しないでください。"
+    ? "今回はユーザーへの返事として、キャラクターのセリフ(type: \"dialogue\")は1つだけ生成してください(同じキャラクターに続けて何度も喋らせないため)。これはセリフの数だけの制限です。地の文(type: \"narration\")はこの制限の対象外なので、ナレーションレベルの指示に従って必要なだけ出力してください。"
     : "1回の出力につき、2〜6発言程度の複数キャラの発言をまとめて生成してください。";
   const replyLengthSystemInstruction = REPLY_LENGTH_SYSTEM_INSTRUCTIONS[replyLength];
   const lines = [
